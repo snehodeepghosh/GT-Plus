@@ -4,6 +4,13 @@ Optimal GT Designer is a fork of [GT Plus](https://github.com/Coow/GT-Plus) 0.1.
 on this fork, from the first update onwards. Throughout, titles stay plain vMix GT files: no feature changes how a
 `.gtzip` is written or how vMix reads it, and editor-only aids are never saved into the file.
 
+## 0.1.54 — 5 November 2026
+
+### Fixes
+- **Reordering layers no longer empties collapsed groups.** Dragging a row in the Layers panel while some groups were
+  collapsed removed every object from those groups, so most of the title vanished. Collapsed groups now keep their
+  objects, and an object dropped onto a collapsed group joins it.
+
 ## 0.1.53 — 5 November 2026
 
 ### Layers panel

@@ -395,6 +395,20 @@ public partial class LayersPanelControl : UserControl
             }
         }
 
+        // a collapsed group lists no object rows, but its objects are still in it: keep them, in their own order (visual order
+        // is top first, the reverse of render order), after anything that was just dropped into the group. Without this a
+        // reorder emptied every collapsed group
+        var placedElsewhere = new HashSet<GtElement>(layerElements.Values.SelectMany(v => v), ReferenceEqualityComparer.Instance);
+        foreach (var (layer, elems) in layerElements)
+        {
+            if (!_collapsed.Contains(layer)) continue;
+            for (int ei = layer.Elements.Count - 1; ei >= 0; ei--)
+            {
+                var el = layer.Elements[ei];
+                if (!placedElsewhere.Contains(el)) elems.Add(el);
+            }
+        }
+
         // an object's Location is relative to its layer, so one dropped into another layer is re-expressed against the new
         // layer's position: it keeps its place on screen instead of jumping by the difference between the two frames
         var ownerBefore = new Dictionary<GtElement, GtLayer>(ReferenceEqualityComparer.Instance);
