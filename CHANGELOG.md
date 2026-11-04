@@ -4,6 +4,17 @@ Optimal GT Designer is a fork of [GT Plus](https://github.com/Coow/GT-Plus) 0.1.
 on this fork, from the first update onwards. Throughout, titles stay plain vMix GT files: no feature changes how a
 `.gtzip` is written or how vMix reads it, and editor-only aids are never saved into the file.
 
+## 0.1.53 — 5 November 2026
+
+### Layers panel
+- **Select several layer groups**: Shift-click or Cmd/Ctrl-click a group's header to add it or take it out.
+  - Dragging on the canvas, the arrow keys, Cmd/Ctrl+D and Delete/Backspace then act on all of them, each as one
+    undo step.
+  - A plain click on one of the selected groups narrows the selection to it.
+- **Collapse and expand groups** with the triangle on each group header, as in Photoshop. Option/Alt-click a triangle
+  to collapse or expand every group. Selecting an object inside a collapsed group opens that group. Collapsed groups
+  are only remembered while the title is open, and are never saved into it.
+
 ## 0.1.52 — 5 November 2026
 
 The first published release of Optimal GT Designer. It includes every change below.

@@ -87,6 +87,10 @@ or height in that layer's coordinates are **not drawn at all** in GT or vMix.
   layer's frame. If the object reaches outside that frame, the frame **grows** just enough to cover it, so nothing is
   cut off. The frame never grows past the edge of the canvas (see below). The layer's other objects don't move on screen, and undo puts both the object and the frame back.
 - Holding **Option** over the line between two rows shows the clipping cursor; see [Masks](masks.md).
+- **Several groups**: Shift-click or Cmd/Ctrl-click group headers to select more than one. Moving them (drag or arrow
+  keys), Cmd+D and Delete then act on all of them, each as one undo step. A plain click on one of them selects just it.
+- **Collapse / expand**: the triangle on a group header folds its objects away, as in Photoshop; Option-click folds
+  or opens every group. Selecting an object inside a folded group opens it. This is panel view state only, never saved.
 - With a **layer** (group) selected, the **arrow keys** move it 1 px (Shift: the larger step from Preferences), one
   undo step per run, the same as for objects.
 - With a **layer** (group) selected, **Cmd+D** duplicates it and **Delete** or **Backspace** deletes it, the same as

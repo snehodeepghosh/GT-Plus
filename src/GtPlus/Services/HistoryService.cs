@@ -278,6 +278,16 @@ public class PropertyChangeAction : IHistoryAction
     public void Redo() => _redo();
 }
 
+/// <summary>several actions undone and redone as one step (undo runs them in reverse)</summary>
+public class CompositeAction : IHistoryAction
+{
+    private readonly List<IHistoryAction> _parts;
+    public string Description { get; }
+    public CompositeAction(string description, List<IHistoryAction> parts) { Description = description; _parts = parts; }
+    public void Undo() { for (int i = _parts.Count - 1; i >= 0; i--) _parts[i].Undo(); }
+    public void Redo() { foreach (var p in _parts) p.Redo(); }
+}
+
 public class HistoryService
 {
     private readonly List<IHistoryAction> _actions = new();
@@ -291,8 +301,23 @@ public class HistoryService
 
     public event EventHandler? Changed;
 
+    private List<IHistoryAction>? _group;
+
+    /// <summary>runs <paramref name="work"/> and records everything it pushes as one undo step called <paramref name="description"/></summary>
+    public void Group(string description, Action work)
+    {
+        if (_group is not null) { work(); return; }
+        _group = new List<IHistoryAction>();
+        List<IHistoryAction> parts;
+        try { work(); }
+        finally { parts = _group; _group = null; }
+        if (parts.Count == 1) Push(parts[0]);
+        else if (parts.Count > 1) Push(new CompositeAction(description, parts));
+    }
+
     public void Push(IHistoryAction action)
     {
+        if (_group is not null) { _group.Add(action); return; }
         if (_cursor < _actions.Count - 1)
             _actions.RemoveRange(_cursor + 1, _actions.Count - _cursor - 1);
         _actions.Add(action);

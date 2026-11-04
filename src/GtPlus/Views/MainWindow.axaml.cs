@@ -1097,15 +1097,16 @@ public partial class MainWindow : Window
 
     private void DoDuplicateLayer()
     {
-        if (!LayersPanel.DuplicateLayer()) { StatusText.Text = "No layer to duplicate"; return; }
-        StatusText.Text = $"Duplicated layer as {GtCanvas.SelectedLayer?.Name}";
+        int n = LayersPanel.DuplicateSelectedLayers();
+        if (n == 0) { StatusText.Text = "No layer to duplicate"; return; }
+        StatusText.Text = n == 1 ? $"Duplicated layer as {GtCanvas.SelectedLayer?.Name}" : $"Duplicated {n} layers";
     }
 
     private void DoDeleteLayer()
     {
-        StatusText.Text = LayersPanel.DeleteLayer()
-            ? "Layer deleted"
-            : "Cannot delete the only layer";
+        int n = LayersPanel.DeleteSelectedLayers();
+        StatusText.Text = n == 0 ? "Cannot delete every layer: a title keeps at least one"
+                        : n == 1 ? "Layer deleted" : $"Deleted {n} layers";
     }
 
     private void Undo_Click(object? sender, RoutedEventArgs e) => DoUndo();

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -194,6 +195,7 @@ public partial class GtCanvasControl : Control
     private bool _isMovingLayer;
     private bool _isResizingLayer;
     private GtPoint _layerMoveOrigin = GtPoint.Zero;
+    private readonly Dictionary<GtLayer, GtPoint> _layerMoveOrigins = new(ReferenceEqualityComparer.Instance);
     private (GtPoint Location, GtSize Dimensions) _layerResizeOrigin = (GtPoint.Zero, new GtSize(0, 0));
 
     // layer-local positions of the resized layer's elements when the handle drag started; GT holds them still in absolute space while the frame moves, so each one is re-derived from this snapshot on every drag step rather than nudged incrementally
@@ -249,6 +251,7 @@ public partial class GtCanvasControl : Control
         CommitFreeTransform();
         _selectedElements.Clear();
         _selectedLayer = null;
+        _selectedLayers.Clear();
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         InvalidateVisual();
     }
@@ -259,6 +262,7 @@ public partial class GtCanvasControl : Control
         CommitFreeTransform();
         if (!addToSelection) _selectedElements.Clear();
         _selectedLayer = null;
+        _selectedLayers.Clear();
         _selectedElements.Add(element);
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         InvalidateVisual();
@@ -269,8 +273,31 @@ public partial class GtCanvasControl : Control
         CommitNudge();
         CommitFreeTransform();
         _selectedLayer = null;
+        _selectedLayers.Clear();
         if (!_selectedElements.Remove(element))
             _selectedElements.Add(element);
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+        InvalidateVisual();
+    }
+
+    /// <summary>every selected layer (group), in the order they were picked; <see cref="SelectedLayer"/> is the last one picked</summary>
+    public IReadOnlyList<GtLayer> SelectedLayers => _selectedLayers;
+
+    private readonly List<GtLayer> _selectedLayers = new();
+
+    /// <summary>adds a layer to the layer selection, or takes it out when it is already in (Shift/Cmd-click in the Layers panel); drops any object selection</summary>
+    public void ToggleLayerSelection(GtLayer layer)
+    {
+        CommitNudge();
+        CommitFreeTransform();
+        _selectedElements.Clear();
+        if (_selectedLayers.Remove(layer))
+            _selectedLayer = _selectedLayers.Count > 0 ? _selectedLayers[^1] : null;
+        else
+        {
+            _selectedLayers.Add(layer);
+            _selectedLayer = layer;
+        }
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         InvalidateVisual();
     }
@@ -282,6 +309,8 @@ public partial class GtCanvasControl : Control
         CommitFreeTransform();
         if (layer is not null) _selectedElements.Clear();
         _selectedLayer = layer;
+        _selectedLayers.Clear();
+        if (layer is not null) _selectedLayers.Add(layer);
         SelectionChanged?.Invoke(this, EventArgs.Empty);
         InvalidateVisual();
     }
@@ -289,7 +318,7 @@ public partial class GtCanvasControl : Control
     private readonly Dictionary<GtElement, GtPoint> _nudgeOrigins = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>an open arrow-key run on a selected layer: the layer and where it started</summary>
-    private (GtLayer Layer, GtPoint Origin)? _layerNudge;
+    private readonly Dictionary<GtLayer, GtPoint> _layerNudge = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>moves the unlocked part of the element selection by a doc-space delta; consecutive nudges coalesce, <see cref="CommitNudge"/> closes the run and pushes it as one move so holding an arrow key costs a single undo step instead of one per repeat</summary>
     public bool NudgeSelection(double dx, double dy)
@@ -297,11 +326,17 @@ public partial class GtCanvasControl : Control
         if (IsPreviewing) return false;
 
         // a selected layer (group) moves as a whole, coalesced and committed the same way
-        if (_selectedElements.Count == 0 && _selectedLayer is { } layer)
+        if (_selectedElements.Count == 0 && _selectedLayers.Count > 0)
         {
-            if (layer.Locked) return false;
-            _layerNudge ??= (layer, layer.Location);
-            layer.Location = new GtPoint(layer.Location.X + dx, layer.Location.Y + dy);
+            bool movedAny = false;
+            foreach (var layer in _selectedLayers)
+            {
+                if (layer.Locked) continue;
+                if (!_layerNudge.ContainsKey(layer)) _layerNudge[layer] = layer.Location;
+                layer.Location = new GtPoint(layer.Location.X + dx, layer.Location.Y + dy);
+                movedAny = true;
+            }
+            if (!movedAny) return false;
             InvalidateVisual();
             SelectionChanged?.Invoke(this, EventArgs.Empty);
             return true;
@@ -327,12 +362,15 @@ public partial class GtCanvasControl : Control
     /// <summary>closes an open nudge run, recording it in history as a single move</summary>
     public void CommitNudge()
     {
-        if (_layerNudge is { } ln)
+        if (_layerNudge.Count > 0)
         {
-            _layerNudge = null;
-            var after = ln.Layer.Location;
-            if (History is not null && (after.X != ln.Origin.X || after.Y != ln.Origin.Y))
-                History.Push(new MoveLayerAction(ln.Layer, ln.Origin, after));
+            var moves = _layerNudge.Where(m => m.Key.Location != m.Value).ToList();
+            _layerNudge.Clear();
+            if (History is not null && moves.Count > 0)
+                History.Group($"Move {moves.Count} layers", () =>
+                {
+                    foreach (var (l, origin) in moves) History.Push(new MoveLayerAction(l, origin, l.Location));
+                });
         }
         if (_nudgeOrigins.Count == 0) return;
 
@@ -807,6 +845,8 @@ public partial class GtCanvasControl : Control
             _animationFrame = null;
             _selectedElements.Clear();
             _selectedLayer = null;
+            _selectedLayers.Clear();
+        _selectedLayers.Clear();
             ApplyZoom(Zoom);
             InvalidateVisual();
         }
@@ -918,8 +958,8 @@ public partial class GtCanvasControl : Control
             foreach (var (el, origin) in _layerResizeElementOrigins)
                 el.Location = origin;
         }
-        if (_isMovingLayer && _selectedLayer is { } movedLayer)
-            movedLayer.Location = _layerMoveOrigin;
+        if (_isMovingLayer)
+            foreach (var (l, origin) in _layerMoveOrigins) l.Location = origin;
 
         _isDrawing       = false;
         _isDragBoxing    = false;
@@ -1309,11 +1349,14 @@ public partial class GtCanvasControl : Control
                 _snapLines.AddRange(solution.Lines);
             }
 
-            double nx = _layerMoveOrigin.X + dx;
-            double ny = _layerMoveOrigin.Y + dy;
-            if (SnapToPixelGrid && !snappedX) nx = Math.Round(nx);
-            if (SnapToPixelGrid && !snappedY) ny = Math.Round(ny);
-            _selectedLayer.Location = new GtPoint(nx, ny);
+            foreach (var (l, origin) in _layerMoveOrigins)
+            {
+                double nx = origin.X + dx;
+                double ny = origin.Y + dy;
+                if (SnapToPixelGrid && !snappedX) nx = Math.Round(nx);
+                if (SnapToPixelGrid && !snappedY) ny = Math.Round(ny);
+                l.Location = new GtPoint(nx, ny);
+            }
 
             InvalidateVisual();
             e.Handled = true;
@@ -1519,10 +1562,15 @@ public partial class GtCanvasControl : Control
             _snapLines.Clear();
             e.Pointer.Capture(null);
 
-            var layer = _selectedLayer;
-            if (History is not null && layer is not null &&
-                (layer.Location.X != _layerMoveOrigin.X || layer.Location.Y != _layerMoveOrigin.Y))
-                History.Push(new MoveLayerAction(layer, _layerMoveOrigin, layer.Location));
+            if (History is not null)
+            {
+                var moves = _layerMoveOrigins.Where(m => m.Key.Location != m.Value).ToList();
+                if (moves.Count > 0)
+                    History.Group($"Move {moves.Count} layers", () =>
+                    {
+                        foreach (var (l, origin) in moves) History.Push(new MoveLayerAction(l, origin, l.Location));
+                    });
+            }
 
             SelectionChanged?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
@@ -1761,7 +1809,7 @@ public partial class GtCanvasControl : Control
     /// <summary>handle under the pointer on the selected layer's frame, if any</summary>
     private ResizeHandle HitTestLayerHandle(Point docPt)
     {
-        if (ActiveTool != CanvasTool.Edit || IsPreviewing || _selectedLayer is null) return ResizeHandle.None;
+        if (ActiveTool != CanvasTool.Edit || IsPreviewing || _selectedLayer is null || _selectedLayers.Count > 1) return ResizeHandle.None;
 
         double r2 = (7.0 / Zoom) * (7.0 / Zoom);
         foreach (var (pt, handle) in GetHandlePoints(LayerBounds(_selectedLayer)))
@@ -1794,17 +1842,24 @@ public partial class GtCanvasControl : Control
             return true;
         }
 
-        if (!LayerBounds(layer).Contains(docPt)) return false;
+        // with several layers selected a press inside any of them moves them all
+        var grabbed = _selectedLayers.FirstOrDefault(l => !l.Locked && LayerBounds(l).Contains(docPt));
+        if (grabbed is null) return false;
 
         // content of another layer showing through this one keeps its own click: the press falls through and selects that element, as it would with no layer selected
         var (hitLayer, hitElement) = HitTest(docPt);
-        if (hitElement is not null && !ReferenceEquals(hitLayer, layer)) return false;
+        if (hitElement is not null && !_selectedLayers.Contains(hitLayer!)) return false;
 
         _isMovingLayer    = true;
         _moveStart        = docPt;
         _layerMoveOrigin  = layer.Location;
-        _moveOriginBounds = LayerBounds(layer);
-        _snapEngine       = BuildSnapEngineExcluding(layer.Elements);
+        _layerMoveOrigins.Clear();
+        foreach (var l in _selectedLayers)
+            if (!l.Locked) _layerMoveOrigins[l] = l.Location;
+        var bounds = LayerBounds(grabbed);
+        foreach (var l in _layerMoveOrigins.Keys) bounds = bounds.Union(LayerBounds(l));
+        _moveOriginBounds = bounds;
+        _snapEngine       = BuildSnapEngineExcluding(_layerMoveOrigins.Keys.SelectMany(l => l.Elements).ToList());
         return true;
     }
 
@@ -2999,7 +3054,7 @@ public partial class GtCanvasControl : Control
 
     private void RenderSelectionOverlays(DrawingContext ctx, GtDocument doc)
     {
-        if (_selectedLayer is not null) RenderLayerSelection(ctx, _selectedLayer);
+        foreach (var selLayer in _selectedLayers) RenderLayerSelection(ctx, selLayer);
         if (_selectedElements.Count == 0) return;
 
         var frame = _animationFrame;
@@ -3074,7 +3129,8 @@ public partial class GtCanvasControl : Control
         ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(18, 255, 176, 32)), pen, bounds);
 
         // handles act on the model geometry, so they are hidden while a preview overrides it
-        if (ActiveTool == CanvasTool.Edit && !IsPreviewing && !layer.Locked)
+        // resize handles only for a single layer; several selected move together but resize one at a time
+        if (ActiveTool == CanvasTool.Edit && !IsPreviewing && !layer.Locked && _selectedLayers.Count == 1)
             RenderResizeHandles(ctx, bounds, stroke);
     }
 

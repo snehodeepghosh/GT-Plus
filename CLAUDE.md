@@ -214,6 +214,12 @@ images, UI aids, view state) stays in memory or preferences and is never written
   `PropertyChangeAction`), Esc/Cmd+Z cancels; selection/tool/preview changes and other commands commit first
   (`HandleFreeTransformKey`). `ArrowCursor(angle)`/`RotateCursor(angle)` are runtime-drawn Photoshop cursors cached per 10°;
   `HandleCursor` uses them for the ordinary resize handles too
+- **Multi-layer selection:** canvas `_selectedLayers` (+ `_selectedLayer` = last picked), `ToggleLayerSelection` from
+  Shift/Cmd-click on a header; layer drags/nudges move all (one `HistoryService.Group` step), resize handles only for one;
+  `LayersPanel.DuplicateSelectedLayers/DeleteSelectedLayers` group their steps. `HistoryService.Group(desc, work)` folds
+  every Push inside into one `CompositeAction`
+- **Collapsed groups:** `LayersPanelControl._collapsed` (editor-only), disclosure triangle on each header, Alt-click = all;
+  `OnCanvasSelectionChanged` reopens a group whose object gets selected
 - **Duplicate/Delete target:** `MainWindow.DoDuplicateSelection`/`DoDeleteSelection` act on the layer when
   `LayerIsSelected` (SelectedLayer set, no elements), else on elements; Cmd/Ctrl+D, Delete and Backspace use them, as do
   the Home tab buttons. `NameService.NextCopyName` keeps counting for all-digit names. Arrow keys nudge a selected layer too

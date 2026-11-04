@@ -33,6 +33,7 @@ public partial class LayersPanelControl : UserControl
     private Point           _dragStartPt;
     private Border?         _dropIndicator;
     private GtElement?      _pendingSelectionApply;
+    private GtLayer?        _pendingLayerSelect;
 
     // icon paint-drag state (click an eye/lock icon and sweep to toggle several rows)
     private enum IconKind { Visibility, Lock }
@@ -94,6 +95,9 @@ public partial class LayersPanelControl : UserControl
             _allRows.Add(new RowMeta(RowKind.Layer, layer, null, layerBorder, layerNameBlock));
             LayersStack.Children.Add(layerBorder);
             AttachDragHandlers(layerBorder);
+
+            // a collapsed group shows only its header, as in Photoshop
+            if (_collapsed.Contains(layer)) continue;
 
             // elements in reverse render order
             for (int ei = layer.Elements.Count - 1; ei >= 0; ei--)
@@ -210,8 +214,14 @@ public partial class LayersPanelControl : UserControl
             // deferred single-click on multi-selected element
             _canvas.SetSelection(_pendingSelectionApply, false);
         }
+        else if (_pendingLayerSelect is not null && _canvas is not null)
+        {
+            // a plain click (no drag) on one of several selected groups narrows the selection to it
+            _canvas.SetLayerSelection(_pendingLayerSelect);
+        }
 
         _pendingSelectionApply = null;
+        _pendingLayerSelect    = null;
         HideDropIndicator();
         _dragging          = null;
         _isDragging        = false;
@@ -457,8 +467,55 @@ public partial class LayersPanelControl : UserControl
             el.Location = new GtPoint(el.Location.X - dx, el.Location.Y - dy);
     }
 
+    /// <summary>layer groups folded shut in the panel; editor-only view state, kept for as long as the title is open and never saved</summary>
+    private readonly HashSet<GtLayer> _collapsed = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>true when <paramref name="layer"/>'s objects are hidden in the panel</summary>
+    public bool IsCollapsed(GtLayer layer) => _collapsed.Contains(layer);
+
+    /// <summary>folds or unfolds one group; with <paramref name="all"/> (Option/Alt-click, as in Photoshop) every group follows it</summary>
+    public void SetCollapsed(GtLayer layer, bool collapsed, bool all = false)
+    {
+        if (_doc is null) return;
+        var targets = all ? _doc.Layers.ToList() : new List<GtLayer> { layer };
+        foreach (var l in targets)
+            if (collapsed) _collapsed.Add(l); else _collapsed.Remove(l);
+        Populate(_doc);
+    }
+
+    /// <summary>Photoshop's disclosure triangle: pointing right when the group is folded, down when it is open</summary>
+    private Button MakeDisclosureButton(GtLayer layer)
+    {
+        bool collapsed = _collapsed.Contains(layer);
+        var arrow = new Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse(collapsed ? "M 3,1 L 7,5 L 3,9 Z" : "M 1,3 L 9,3 L 5,7 Z"),
+            Fill = new SolidColorBrush(Color.Parse("#bbbbbb")),
+            Width = 10, Height = 10, Stretch = Stretch.None,
+        };
+        var btn = new Button
+        {
+            Width = 16, Height = 22, Padding = new Thickness(0),
+            Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center,
+            Content = arrow,
+        };
+        ToolTip.SetTip(btn, collapsed ? "Expand group (Option-click: all groups)" : "Collapse group (Option-click: all groups)");
+        btn.Click += (_, _) =>
+        {
+            bool all = _lastDisclosureAlt;
+            SetCollapsed(layer, !_collapsed.Contains(layer), all);
+        };
+        btn.AddHandler(PointerPressedEvent, (_, e) => _lastDisclosureAlt = e.KeyModifiers.HasFlag(KeyModifiers.Alt),
+                       Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        return btn;
+    }
+
+    private bool _lastDisclosureAlt;
+
     private Border BuildLayerHeader(GtLayer layer, out TextBlock nameBlock)
     {
+        var disclosure = MakeDisclosureButton(layer);
         var visBtn  = MakeIconButton(IconKind.Visibility, layer, null);
         var lockBtn = MakeIconButton(IconKind.Lock,       layer, null);
 
@@ -474,6 +531,7 @@ public partial class LayersPanelControl : UserControl
         };
 
         var inner = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        inner.Children.Add(disclosure);
         inner.Children.Add(visBtn);
         inner.Children.Add(lockBtn);
         inner.Children.Add(nameBlock);
@@ -491,7 +549,13 @@ public partial class LayersPanelControl : UserControl
             if (e.Source is Button or TextBox) return;
             if (_renameBox is not null) return;
             if (!e.GetCurrentPoint(header).Properties.IsLeftButtonPressed) return;
-            _canvas?.SetLayerSelection(layer);
+            // Shift or Cmd/Ctrl adds the group to the selection (or takes it out), as with object rows
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) || PlatformKeys.HasCommand(e.KeyModifiers))
+                _canvas?.ToggleLayerSelection(layer);
+            else if (_canvas?.SelectedLayers.Count > 1 && _canvas.SelectedLayers.Contains(layer))
+                _pendingLayerSelect = layer;   // keeps them all for a drag; a plain click narrows to this one on release
+            else
+                _canvas?.SetLayerSelection(layer);
         };
 
         AttachRowContextMenu(header, layer, null);
@@ -834,6 +898,17 @@ public partial class LayersPanelControl : UserControl
 
     private void OnCanvasSelectionChanged(object? sender, EventArgs e)
     {
+        // selecting an object inside a folded group (on the canvas) opens that group, as Photoshop does
+        if (_doc is not null && _collapsed.Count > 0 && _canvas?.SelectedElements.Count > 0)
+        {
+            var open = _doc.Layers.Where(l => _collapsed.Contains(l) && l.Elements.Any(el => _canvas.SelectedElements.Contains(el))).ToList();
+            if (open.Count > 0)
+            {
+                foreach (var l in open) _collapsed.Remove(l);
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => Populate(_doc));
+            }
+        }
+
         var selected      = _canvas?.SelectedElements;
         var selectedLayer = _canvas?.SelectedLayer;
         var selBrush      = new SolidColorBrush(Color.FromArgb(60, 80, 160, 255));
@@ -846,7 +921,7 @@ public partial class LayersPanelControl : UserControl
             if (meta.Kind == RowKind.Element)
                 meta.Border.Background = selected?.Contains(meta.Element) == true ? selBrush : Brushes.Transparent;
             else
-                meta.Border.Background = ReferenceEquals(meta.Layer, selectedLayer) ? layerSelBrush : layerBrush;
+                meta.Border.Background = _canvas?.SelectedLayers.Contains(meta.Layer) == true ? layerSelBrush : layerBrush;
         }
     }
 
@@ -876,7 +951,7 @@ public partial class LayersPanelControl : UserControl
             // right-clicking outside the current selection moves the selection to that row, so "Rename" always acts on what the user is pointing at
             if (element is not null && _canvas is not null && !_canvas.SelectedElements.Contains(element))
                 _canvas.SetSelection(element, false);
-            else if (element is null && !ReferenceEquals(_canvas?.SelectedLayer, layer))
+            else if (element is null && _canvas?.SelectedLayers.Contains(layer) != true)
                 _canvas?.SetLayerSelection(layer);
         };
 
@@ -1482,6 +1557,62 @@ public partial class LayersPanelControl : UserControl
     }
 
     /// <summary>copies the current layer (elements, and the animations targeting them) onto a new layer directly above it</summary>
+    /// <summary>the layers a layer command acts on: every selected group when several are selected, else the one the menu or selection points at</summary>
+    private List<GtLayer> CommandLayers()
+    {
+        if (_doc is null) return new();
+        if (_canvas?.SelectedLayers is { Count: > 1 } many)
+            return many.Where(l => _doc.Layers.Contains(l)).OrderBy(l => _doc.Layers.IndexOf(l)).ToList();
+        return CommandLayer is { } one ? new List<GtLayer> { one } : new();
+    }
+
+    /// <summary>duplicates every selected group as one undo step and selects the copies; returns how many were copied</summary>
+    public int DuplicateSelectedLayers()
+    {
+        var sources = CommandLayers();
+        if (sources.Count <= 1) return DuplicateLayer() ? 1 : 0;
+
+        var copies = new List<GtLayer>();
+        void Work()
+        {
+            foreach (var src in sources)
+            {
+                _focusLayer = src;
+                if (DuplicateLayer() && _canvas?.SelectedLayer is { } copy) copies.Add(copy);
+            }
+        }
+        if (History is not null) History.Group($"Duplicate {sources.Count} layers", Work); else Work();
+        _focusLayer = null;
+        if (copies.Count > 0 && _canvas is not null)
+        {
+            _canvas.SetLayerSelection(copies[0]);
+            foreach (var c in copies.Skip(1)) _canvas.ToggleLayerSelection(c);
+        }
+        return copies.Count;
+    }
+
+    /// <summary>deletes every selected group as one undo step; the title always keeps at least one layer. Returns how many went</summary>
+    public int DeleteSelectedLayers()
+    {
+        var targets = CommandLayers();
+        if (targets.Count <= 1) return DeleteLayer() ? 1 : 0;
+        if (_doc is null || targets.Count >= _doc.Layers.Count) return 0;
+
+        int deleted = 0;
+        void Work()
+        {
+            foreach (var l in targets)
+            {
+                _focusLayer = l;
+                if (DeleteLayer()) deleted++;
+            }
+        }
+        if (History is not null) History.Group($"Delete {targets.Count} layers", Work); else Work();
+        _focusLayer = null;
+        _canvas?.SetLayerSelection(null);
+        return deleted;
+    }
+
     public bool DuplicateLayer()
     {
         var doc    = _doc;
