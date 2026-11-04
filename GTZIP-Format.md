@@ -603,9 +603,9 @@ Two GT behaviours vMix GT++ deliberately does **not** copy, both of which destro
   user actually changes something
 
 `Skew` is drawn and editable from the Effects tab: `Angle` is the X,Y shear in degrees, taken about the
-object's centre moved by `CenterOffset`. Checked against vMix: a positive X leans the object forward (its
-top goes right, like italic), the opposite of D2D's `Matrix3x2F::Skew`; positive Y is taken to lift the right
-side by the same rule. A skewed mask object cuts a skewed shape.
+object's centre moved by `CenterOffset` (y down). Checked against vMix: a positive X leans the object forward
+(its top goes right, like italic) and a positive Y lifts its right side, the opposite of D2D's
+`Matrix3x2F::Skew` on both axes. A skewed mask object cuts a skewed shape.
 The ribbon deletes the effect when both angles return to 0, as GT does; remember that an `Angle`
 attribute absent from the file means GT's constructed default of `30,0`, not zero.
 
