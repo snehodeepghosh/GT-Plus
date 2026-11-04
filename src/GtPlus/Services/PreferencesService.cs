@@ -84,6 +84,12 @@ public class PreferencesService
     public double WindowHeight { get; set; } = 780;
     public string WindowState  { get; set; } = "Normal";
 
+    // where the detached timeline window last sat, so it reopens on the same monitor; -1 = let the OS place it
+    public int    TimelineWindowX      { get; set; } = -1;
+    public int    TimelineWindowY      { get; set; } = -1;
+    public double TimelineWindowWidth  { get; set; } = 1280;
+    public double TimelineWindowHeight { get; set; } = 360;
+
     public void Load()
     {
         try
@@ -126,6 +132,10 @@ public class PreferencesService
                 WindowWidth  = data.WindowWidth  > 0 ? data.WindowWidth  : 1280;
                 WindowHeight = data.WindowHeight > 0 ? data.WindowHeight : 780;
                 WindowState  = data.WindowState ?? "Normal";
+                TimelineWindowX      = data.TimelineWindowX;
+                TimelineWindowY      = data.TimelineWindowY;
+                TimelineWindowWidth  = data.TimelineWindowWidth  > 0 ? data.TimelineWindowWidth  : 1280;
+                TimelineWindowHeight = data.TimelineWindowHeight > 0 ? data.TimelineWindowHeight : 360;
             }
         }
         catch { }
@@ -169,6 +179,10 @@ public class PreferencesService
                 WindowWidth  = WindowWidth,
                 WindowHeight = WindowHeight,
                 WindowState  = WindowState,
+                TimelineWindowX      = TimelineWindowX,
+                TimelineWindowY      = TimelineWindowY,
+                TimelineWindowWidth  = TimelineWindowWidth,
+                TimelineWindowHeight = TimelineWindowHeight,
             });
             File.WriteAllText(FilePath, json);
         }
@@ -211,5 +225,9 @@ public class PreferencesService
         public double WindowWidth  { get; set; } = 1280;
         public double WindowHeight { get; set; } = 780;
         public string WindowState  { get; set; } = "Normal";
+        public int    TimelineWindowX      { get; set; } = -1;
+        public int    TimelineWindowY      { get; set; } = -1;
+        public double TimelineWindowWidth  { get; set; } = 1280;
+        public double TimelineWindowHeight { get; set; } = 360;
     }
 }

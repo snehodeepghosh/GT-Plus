@@ -1,3 +1,4 @@
+using GtPlus.Services;
 using System;
 using System.Globalization;
 using Avalonia;
@@ -154,7 +155,7 @@ public class RulerControl : Control
 
         if (_draggingGuide)
         {
-            Canvas?.UpdateGuideDrag(DocPointFor(e), e.KeyModifiers.HasFlag(KeyModifiers.Control));
+            Canvas?.UpdateGuideDrag(DocPointFor(e), PlatformKeys.HasCommand(e.KeyModifiers));
             e.Handled = true;
             return;
         }

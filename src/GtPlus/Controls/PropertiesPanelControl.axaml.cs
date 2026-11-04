@@ -119,6 +119,11 @@ public partial class PropertiesPanelControl : UserControl
         PopulateFontWeights();
         PopulateStrokeCombos();
         PopulateShadowPresets();
+        ReflectionPresetBox.Items.Add("None");
+        foreach (var (name, depth) in GtReflection.Presets)
+            ReflectionPresetBox.Items.Add($"{name} ({depth * 100:0}%)");
+        ReflectionPresetBox.Items.Add("Custom");
+        ReflectionPresetBox.SelectedIndex = 0;
         MaskObjectBox.ItemsSource = _maskEntries;
         BoundingObjectBox.ItemsSource = _boundingEntries;
         WireBoundingPadding();
@@ -237,6 +242,21 @@ public partial class PropertiesPanelControl : UserControl
         WireCrop(OpacitySlider, OpacityBox, "Opacity",
             (el, v) => el.Opacity = Math.Clamp(v / 100.0, 0.0, 1.0),
             (el)    => el.Opacity * 100.0);
+
+        // skew rides the same plumbing; each axis writes through GtSkew so the effect appears on the first non-zero angle and goes away at 0,0
+        WireCrop(SkewXSlider, SkewXBox, "Skew X",
+            (el, v) => GtSkew.Set(el, v, GtSkew.Get(el).Y),
+            (el)    => GtSkew.Get(el).X);
+        WireCrop(SkewYSlider, SkewYBox, "Skew Y",
+            (el, v) => GtSkew.Set(el, GtSkew.Get(el).X, v),
+            (el)    => GtSkew.Get(el).Y);
+
+        // reflection depth in whole percent; zero removes the reflection, any other value adds one
+        WireCrop(ReflectionDepthSlider, ReflectionDepthBox, "Reflection depth",
+            (el, v) => GtReflection.Set(el, v / 100.0),
+            (el)    => (GtReflection.Get(el) ?? 0) * 100.0);
+        // registered after WireCrop's own handler, so the model already holds the new depth when the preset readout follows it
+        ReflectionDepthBox.ValueChanged += (_, _) => { if (!_updating) RefreshReflectionAndFlipControls(); };
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -249,34 +269,8 @@ public partial class PropertiesPanelControl : UserControl
 
     private bool _barHeightComputed;
 
-    private void EnsureBarHeightComputed()
-    {
-        if (_barHeightComputed)
-            return;
-        _barHeightComputed = true;
-
-        var sections = new Control[]
-        {
-            TextSpecificPanel, FillStrokePanel, ImagePanel, WebPanel, TickerPanel,
-            ObjectRefPanel, DataFlagsPanel, CropPanel, ShadowPanel, OpacityPanel,
-        };
-        var saved = sections.Select(s => s.IsVisible).ToArray();
-        foreach (var s in sections)
-            s.IsVisible = true;
-
-        var savedScrollVisibility = PropertiesScroll.HorizontalScrollBarVisibility;
-        PropertiesScroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Visible;
-
-        Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var height = DesiredSize.Height;
-
-        for (var i = 0; i < sections.Length; i++)
-            sections[i].IsVisible = saved[i];
-        PropertiesScroll.HorizontalScrollBarVisibility = savedScrollVisibility;
-
-        if (height > PropertiesBar.MinHeight)
-            PropertiesBar.MinHeight = height;
-    }
+    /// <summary>the ribbon body has a fixed height, so there is nothing to measure; kept so the attach path reads the same</summary>
+    private void EnsureBarHeightComputed() { }
 
     private void LoadFonts()
     {
@@ -320,34 +314,39 @@ public partial class PropertiesPanelControl : UserControl
 
         var allImages   = _allElements.Count > 0 && _allElements.All(e => e is GtImageElement);
 
-        // sections are hidden rather than greyed out, the bar is too crowded to carry controls the current selection cannot use; each section owns its leading separator so hiding it takes the divider with it
-        // location / rotation / dimensions never leave the bar, they grey out instead so the toolbar keeps a fixed anchor on the left whatever is selected
+        // ribbon groups grey out rather than hide, as GT's do, so a tab never reflows under the pointer
         PositionSizePanel.IsEnabled = el is not null;
-        TextSpecificPanel.IsVisible = allText;
-        CropPanel.IsVisible         = el is not null;
+        AlignGroup.IsEnabled        = el is not null;
+        AnchorGroup.IsEnabled       = el is not null;
+        TextSpecificPanel.IsEnabled = allText;
+        CropPanel.IsEnabled         = el is not null;
 
         // values the single slider cannot describe force their own group open, so a hand-authored file is never misreported; the two groups decide separately
         if (_allElements.Any(e => !CropRangeIsUniform(e)))
             SetCropExpanded(true);
         if (_allElements.Any(e => !FeatherIsUniform(e)))
             SetFeatherExpanded(true);
-        OpacityPanel.IsVisible      = el is not null;
-        ShadowPanel.IsVisible       = el is not null;
-        DataFlagsPanel.IsVisible    = el is not null;
-        ImagePanel.IsVisible        = allImages;
+        OpacityPanel.IsEnabled      = el is not null;
+        ShadowPanel.IsEnabled       = el is not null;
+        SkewPanel.IsEnabled         = el is not null;
+        ReflectionPanel.IsEnabled   = el is not null;
+        TextureFlipPanel.IsEnabled  = el is not null;
+        DataFlagsPanel.IsEnabled    = el is not null;
+        ImagePanel.IsEnabled        = allImages;
 
         var allWeb     = _allElements.Count > 0 && _allElements.All(e => e is GtWebElement);
-        WebPanel.IsVisible = allWeb;
+        WebPanel.IsEnabled = allWeb;
 
         var allTickers = _allElements.Count > 0 && _allElements.All(e => e is GtTickerElement);
-        TickerPanel.IsVisible = allTickers;
-        AutoSizePanel.IsVisible = allText && !_allElements.Any(e => e is GtTickerElement);
+        TickerPanel.IsEnabled = allTickers;
+        TickerTransportGroup.IsEnabled = allTickers;
+        AutoSizePanel.IsEnabled = allText && !_allElements.Any(e => e is GtTickerElement);
 
         // source swap targets the primary element, so only offer it on a single selection
-        ImageBrowseButton.IsVisible = allImages && _allElements.Count == 1;
+        ImageBrowseButton.IsEnabled = allImages && _allElements.Count == 1;
 
         // text content editing: primary only, single-selection only
-        TextInputGroup.IsVisible = _allElements.Count <= 1;
+        TextInputGroup.IsEnabled = _allElements.Count <= 1;
 
         _updating = true;
         try
@@ -372,6 +371,7 @@ public partial class PropertiesPanelControl : UserControl
             RefreshMaskControls();
             RefreshBoundingControls();
             RefreshShadowControls();
+            RefreshReflectionAndFlipControls();
 
             if (el is GtTextBlock tb)
             {
@@ -426,7 +426,7 @@ public partial class PropertiesPanelControl : UserControl
 
             // fill / stroke section: stays visible for elements without fill/stroke (images), just greyed out
             var anyFillStroke = _allElements.Count > 0 && _allElements.All(HasFillStroke);
-            FillStrokePanel.IsVisible = anyFillStroke;
+            FillStrokePanel.IsEnabled = anyFillStroke;
 
             if (!anyFillStroke)
             {
@@ -442,14 +442,14 @@ public partial class PropertiesPanelControl : UserControl
 
                 // dash style, only rect/ellipse support it
                 var hasDash = _allElements.All(e => e is GtRectangleElement or GtEllipseElement);
-                StrokeStyleBox.IsVisible = hasDash;
-                StrokeStyleLabel.IsVisible = hasDash;
+                StrokeStyleBox.IsEnabled = hasDash;
+                StrokeStyleLabel.IsEnabled = hasDash;
                 StrokeStyleBox.SelectedIndex = hasDash ? (int)GetStrokeDashStyle(el) : 0;
 
                 // corners, rectangle only
                 var hasCorners = _allElements.All(e => e is GtRectangleElement);
-                CornersBox.IsVisible = hasCorners;
-                CornersLabel.IsVisible = hasCorners;
+                CornersBox.IsEnabled = hasCorners;
+                CornersLabel.IsEnabled = hasCorners;
                 CornersBox.SelectedIndex = hasCorners
                     ? (int)((el as GtRectangleElement)!.Style)
                     : 0;
@@ -526,8 +526,7 @@ public partial class PropertiesPanelControl : UserControl
         var sameLayer = _currentLayer is not null && _allElements.Count > 0 &&
                         _allElements.All(e => _currentLayer.Elements.Contains(e));
 
-        ObjectRefPanel.IsVisible = sameLayer;
-        MaskPanel.IsVisible      = sameLayer;
+        MaskPanel.IsEnabled = sameLayer;
 
         _maskEntries.Clear();
         _maskEntries.Add(new ObjectEntry { Name = null, Display = "(None)" });
@@ -627,8 +626,8 @@ public partial class PropertiesPanelControl : UserControl
         var sameLayer = _currentLayer is not null && _allElements.Count > 0 &&
                         _allElements.All(e => _currentLayer.Elements.Contains(e));
 
-        BoundingPanel.IsVisible        = sameLayer;
-        BoundingPaddingPanel.IsVisible = sameLayer;
+        BoundingPanel.IsEnabled        = sameLayer;
+        BoundingPaddingPanel.IsEnabled = sameLayer;
 
         _boundingEntries.Clear();
         _boundingEntries.Add(new ObjectEntry { Name = null, Display = "(None)" });
@@ -1415,6 +1414,78 @@ public partial class PropertiesPanelControl : UserControl
 
     private void FeatherExpandButton_Click(object? sender, RoutedEventArgs e)
         => SetFeatherExpanded(FeatherExpandButton.IsChecked == true);
+
+    /// <summary>reflection preset and texture-flip boxes from the primary element; the depth slider and box follow through <see cref="RefreshCropControls"/></summary>
+    private void RefreshReflectionAndFlipControls()
+    {
+        var el = _currentElement;
+        var wasUpdating = _updating;
+        _updating = true;
+        try
+        {
+            var depth = el is null ? null : GtReflection.Get(el);
+            int index = 0;
+            if (depth is { } d)
+            {
+                index = ReflectionPresetBox.Items.Count - 1;   // Custom
+                for (int i = 0; i < GtReflection.Presets.Count; i++)
+                    if (Math.Abs(GtReflection.Presets[i].Depth - d) < 1e-6) { index = i + 1; break; }
+            }
+            ReflectionPresetBox.SelectedIndex = index;
+
+            var (h, v) = el is null ? (false, false) : GtTextureFlip.Get(el);
+            FlipHorizontalCheck.IsChecked = h;
+            FlipVerticalCheck.IsChecked   = v;
+        }
+        finally
+        {
+            _updating = wasUpdating;
+        }
+    }
+
+    private void ReflectionPresetBox_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_updating || _currentElement is null) return;
+
+        int index = ReflectionPresetBox.SelectedIndex;
+        // "Custom" names whatever depth is already in the box, so picking it changes nothing
+        if (index < 0 || index > GtReflection.Presets.Count) return;
+
+        double? depth = index == 0 ? null : GtReflection.Presets[index - 1].Depth;
+        var snapshot = SnapshotEffects();
+        foreach (var el in _allElements) GtReflection.Set(el, depth);
+
+        PushEffectsHistory(index == 0 ? "Remove reflection" : $"Reflection {GtReflection.Presets[index - 1].Name}", snapshot);
+        RefreshCropControls();
+        RefreshReflectionAndFlipControls();
+        Apply();
+    }
+
+    private void FlipCheck_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_updating || _currentElement is null || sender is not CheckBox box) return;
+
+        var type = ReferenceEquals(box, FlipHorizontalCheck) ? GtEffectType.FlipX : GtEffectType.FlipY;
+        bool on  = box.IsChecked == true;
+
+        var snapshot = SnapshotEffects();
+        foreach (var el in _allElements) GtTextureFlip.Set(el, type, on);
+
+        PushEffectsHistory($"{(on ? "Flip" : "Unflip")} {(type == GtEffectType.FlipX ? "horizontal" : "vertical")}", snapshot);
+        RefreshReflectionAndFlipControls();
+        Apply();
+    }
+
+    private void SkewResetButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_updating || _currentElement is null) return;
+        var snapshot = SnapshotEffects();
+        foreach (var el in _allElements)
+            while (GtSkew.First(el.Effects) is { } skew) el.Effects.Remove(skew);
+        PushEffectsHistory("Reset skew", snapshot);
+        RefreshCropControls();
+        Apply();
+    }
 
     private void CropResetButton_Click(object? sender, RoutedEventArgs e)
         => ResetCrop("Reset crop range", c => { c.X0 = 0; c.Y0 = 0; c.X1 = 1; c.Y1 = 1; });

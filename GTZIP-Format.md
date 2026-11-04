@@ -602,7 +602,20 @@ Two GT behaviours vMix GT++ deliberately does **not** copy, both of which destro
   (chained shadows compose into a single equivalent Gaussian) and only rewrites the list when the
   user actually changes something
 
-Effects vMix GT++ does not render - `GaussianBlur`, `Skew`, the flips, `Reflection`, `Composite` -
+`Skew` is drawn and editable from the Effects tab: `Angle` is the X,Y shear in degrees (D2D's
+`Matrix3x2F::Skew` convention - positive X pushes the bottom right, positive Y pushes the right side
+down), taken about the object's centre moved by `CenterOffset`. A skewed mask object cuts a skewed shape.
+The ribbon deletes the effect when both angles return to 0, as GT does; remember that an `Angle`
+attribute absent from the file means GT's constructed default of `30,0`, not zero.
+
+`FlipX` and `FlipY` (the ribbon's Texture flip "Horizontal" and "Vertical") are drawn and editable: each
+mirrors the object's own picture about its centre, in list order with any skew, and carries no settings.
+`Reflection` (`Mode="Finish"`) is drawn and editable too. vMix documents it only as a flat 2D reflection, so
+vMix GT++ draws the finished object mirrored about its bottom edge, fading from 50% to nothing over `Depth`
+× the object's height; GT's own gallery values are not documented, and the ribbon's Short / Half / Full
+picks (0.25 / 0.5 / 1) are this editor's. An absent `Depth` means GT's constructed `0.5`.
+
+Effects vMix GT++ does not render - `GaussianBlur`, `Composite` -
 are still read, kept in order and written back unchanged, so a file that uses them survives a
 round trip. Effects on a `Layer` are read, drawn and written, but only elements can be given one
 from the properties bar, matching GT's own object-scoped gallery.
@@ -651,6 +664,11 @@ Masks are not rectangle-only: any element type may carry a `<Type>.Mask` child u
 ```
 
 When the mask target is itself a `TextBlock`, the clip is the glyph outline, not the box.
+
+GT's engine composes the mask object in a "write" pass before the masked object reads it
+(`GraphicsObject.OnCompose`), so what masks is what the mask object draws: an image's alpha, a gradient's
+transparency, its crop and opacity, not just its bounding box. A mask object whose `Visible` is false is not
+composed and the masked object draws unmasked.
 
 ### Rectangle stroke attributes
 

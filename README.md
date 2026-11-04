@@ -5,6 +5,26 @@ Extends the functionality of the built-in vMix GT Title Designer.
 
 Built with [Avalonia UI](https://avaloniaui.net/) - runs on Windows, macOS, and Linux.
 
+## Optimal GT Designer
+
+This fork is packaged as **Optimal GT Designer** by Optimal Studios. On top of GT Plus it adds:
+
+- a ribbon interface laid out like vMix GT Title Designer, with a dark theme
+- Photoshop import (File › Import PSD, or drop a `.psd`/`.psb` on the canvas): groups become layers, text stays
+  editable, and Photoshop clipping masks become GT masks
+- masks drawn the way GT's engine draws them: the mask object's own pixels cut the masked object, not its bounding box
+- Skew, Reflection and Texture Flip effects
+- a Figma-style timeline that can be detached onto another monitor, with the working area highlighted
+- drag-to-move on the canvas, a grid or black canvas background, and Cmd/Option shortcuts on macOS
+
+To build the Mac app (Apple Silicon) into `dist/macos`:
+
+```bash
+packaging/macos/build-mac.sh 0.1.30
+```
+
+The app is ad-hoc signed, not notarized, so the first launch needs right-click › Open.
+
 ---
 
 ## Prerequisites

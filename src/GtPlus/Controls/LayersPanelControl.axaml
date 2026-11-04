@@ -1,56 +1,35 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="GtPlus.Controls.LayersPanelControl">
-    <Border Background="#141414" BorderBrush="#333333" BorderThickness="1,0,0,0">
+    <Border Background="#141414" BorderBrush="#2e2e2e" BorderThickness="1,0,0,0">
         <DockPanel>
             <Border DockPanel.Dock="Top"
-                    Background="#1a1a1a"
-                    Padding="10,6"
-                    BorderBrush="#333333"
+                    Background="#1b1b1b"
+                    Padding="10,0,4,0"
+                    Height="32"
+                    BorderBrush="#2e2e2e"
                     BorderThickness="0,0,0,1">
                 <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                     <TextBlock Grid.Column="0"
-                               Text="LAYERS"
+                               Text="Layers"
                                FontSize="11"
-                               FontWeight="SemiBold"
                                VerticalAlignment="Center"
-                               Foreground="#888888" />
-                    <Button Grid.Column="1"
-                            x:Name="NewLayerButton"
-                            Content="+"
-                            Width="20" Height="20"
-                            Padding="0"
-                            FontSize="13"
-                            Background="Transparent"
-                            Foreground="#cccccc"
-                            HorizontalContentAlignment="Center"
-                            VerticalContentAlignment="Center"
+                               Foreground="#a6a6a6" />
+                    <Button Grid.Column="1" x:Name="NewLayerButton" Classes="rb sm"
                             ToolTip.Tip="New layer (Ctrl+Shift+N)"
-                            Click="NewLayerButton_Click" />
-                    <Button Grid.Column="2"
-                            x:Name="DuplicateLayerButton"
-                            Content="⧉"
-                            Width="20" Height="20"
-                            Padding="0"
-                            FontSize="12"
-                            Background="Transparent"
-                            Foreground="#cccccc"
-                            HorizontalContentAlignment="Center"
-                            VerticalContentAlignment="Center"
-                            ToolTip.Tip="Duplicate layer"
-                            Click="DuplicateLayerButton_Click" />
-                    <Button Grid.Column="3"
-                            x:Name="DeleteLayerButton"
-                            Content="✕"
-                            Width="20" Height="20"
-                            Padding="0"
-                            FontSize="11"
-                            Background="Transparent"
-                            Foreground="#cccccc"
-                            HorizontalContentAlignment="Center"
-                            VerticalContentAlignment="Center"
+                            Click="NewLayerButton_Click">
+                        <Path Classes="ic s14" Data="M 12,5 L 12,19 M 5,12 L 19,12"/>
+                    </Button>
+                    <Button Grid.Column="2" x:Name="DuplicateLayerButton" Classes="rb sm"
+                            ToolTip.Tip="Duplicate layer (Ctrl+Shift+D)"
+                            Click="DuplicateLayerButton_Click">
+                        <Path Classes="ic s14" Data="M 10,8 L 18,8 A 2,2 0 0 1 20,10 L 20,18 A 2,2 0 0 1 18,20 L 10,20 A 2,2 0 0 1 8,18 L 8,10 A 2,2 0 0 1 10,8 Z M 4,16 L 4,6 A 2,2 0 0 1 6,4 L 16,4"/>
+                    </Button>
+                    <Button Grid.Column="3" x:Name="DeleteLayerButton" Classes="rb sm"
                             ToolTip.Tip="Delete layer"
-                            Click="DeleteLayerButton_Click" />
+                            Click="DeleteLayerButton_Click">
+                        <Path Classes="ic s14" Data="M 3,6 L 21,6 M 19,6 L 19,20 A 2,2 0 0 1 17,22 L 7,22 A 2,2 0 0 1 5,20 L 5,6 M 8,6 L 8,4 A 2,2 0 0 1 10,2 L 14,2 A 2,2 0 0 1 16,4 L 16,6"/>
+                    </Button>
                 </Grid>
             </Border>
             <ScrollViewer HorizontalScrollBarVisibility="Disabled"

@@ -898,7 +898,7 @@ public class GtCanvasControl : Control
         if (!props.IsLeftButtonPressed) return;
 
         var docPt = ToDocPoint(e.GetPosition(this));
-        var ctrl  = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        var ctrl  = PlatformKeys.HasCommand(e.KeyModifiers);
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var alt   = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
 
@@ -964,7 +964,15 @@ public class GtCanvasControl : Control
             else
             {
                 var (_, el) = HitTest(docPt);
-                if (el is not null) SetSelection(el, false);
+                if (el is not null)
+                {
+                    // pressing on an element that is already part of a multi-selection keeps the group, so the whole selection drags together
+                    if (!_selectedElements.Contains(el)) SetSelection(el, false);
+
+                    // the Select tool drags what it grabs, as the pointer does in GT; previewing is left out because the drawn positions are not the model's
+                    if (!IsPreviewing && ActiveTool == CanvasTool.Select && TryBeginMove(docPt))
+                        e.Pointer.Capture(this);
+                }
                 else ClearSelection();
             }
         }
@@ -1004,20 +1012,8 @@ public class GtCanvasControl : Control
                     if (shift) ToggleSelection(el);
                     else if (!_selectedElements.Contains(el)) SetSelection(el, false);
 
-                    // start move for unlocked selected elements only
-                    _moveOrigins.Clear();
-                    foreach (var sel in _selectedElements)
-                        if (!sel.Locked && !IsLayerLocked(sel))
-                            _moveOrigins[sel] = sel.Location;
-
-                    if (_moveOrigins.Count > 0)
-                    {
-                        _isMoving         = true;
-                        _moveStart        = docPt;
-                        _moveOriginBounds = GetSelectionBounds();
-                        _snapEngine       = BuildSnapEngine();
+                    if (TryBeginMove(docPt))
                         e.Pointer.Capture(this);
-                    }
                 }
                 else
                 {
@@ -1029,13 +1025,30 @@ public class GtCanvasControl : Control
         e.Handled = true;
     }
 
+    /// <summary>starts dragging the unlocked part of the selection from <paramref name="docPt"/>; false when everything selected is locked</summary>
+    private bool TryBeginMove(Point docPt)
+    {
+        _moveOrigins.Clear();
+        foreach (var sel in _selectedElements)
+            if (!sel.Locked && !IsLayerLocked(sel))
+                _moveOrigins[sel] = sel.Location;
+
+        if (_moveOrigins.Count == 0) return false;
+
+        _isMoving         = true;
+        _moveStart        = docPt;
+        _moveOriginBounds = GetSelectionBounds();
+        _snapEngine       = BuildSnapEngine();
+        return true;
+    }
+
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
 
         // Ctrl+wheel is the editor's zoom whatever is under the pointer, everything else scrolls the page it is over
         if (IsPreviewing || _webPreviews is null || e.Handled) return;
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Alt)) return;
+        if (PlatformKeys.HasCommand(e.KeyModifiers) || e.KeyModifiers.HasFlag(KeyModifiers.Alt)) return;
 
         var docPt = ToDocPoint(e.GetPosition(this));
         if (HitTestInteractiveWeb(docPt) is not ({ } layer, { } web)) return;
@@ -1138,7 +1151,7 @@ public class GtCanvasControl : Control
 
         if (_draggedGuide is not null)
         {
-            UpdateGuideDrag(docPt, e.KeyModifiers.HasFlag(KeyModifiers.Control));
+            UpdateGuideDrag(docPt, PlatformKeys.HasCommand(e.KeyModifiers));
             e.Handled = true;
             return;
         }
@@ -1165,7 +1178,7 @@ public class GtCanvasControl : Control
             var target    = docPt;
 
             _snapLines.Clear();
-            if (_snapEngine is not null && !shiftHeld && !e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            if (_snapEngine is not null && !shiftHeld && !PlatformKeys.HasCommand(e.KeyModifiers))
             {
                 var dx = docPt.X - _resizeStart.X;
                 var dy = docPt.Y - _resizeStart.Y;
@@ -1194,7 +1207,7 @@ public class GtCanvasControl : Control
 
             _snapLines.Clear();
             bool snappedX = false, snappedY = false;
-            if (_snapEngine is not null && !e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            if (_snapEngine is not null && !PlatformKeys.HasCommand(e.KeyModifiers))
             {
                 var moved = new Rect(_moveOriginBounds.X + dx, _moveOriginBounds.Y + dy,
                                      _moveOriginBounds.Width, _moveOriginBounds.Height);
@@ -1224,7 +1237,7 @@ public class GtCanvasControl : Control
 
             _snapLines.Clear();
             // an aspect-constrained resize derives one axis from the other, so a snap on either axis would fight the constraint; Ctrl suspends snapping the same way it does moves
-            if (_snapEngine is not null && !shiftHeld && !e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            if (_snapEngine is not null && !shiftHeld && !PlatformKeys.HasCommand(e.KeyModifiers))
             {
                 var dx = docPt.X - _resizeStart.X;
                 var dy = docPt.Y - _resizeStart.Y;
@@ -1254,7 +1267,7 @@ public class GtCanvasControl : Control
 
             _snapLines.Clear();
             bool snappedX = false, snappedY = false;
-            if (_snapEngine is not null && !e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            if (_snapEngine is not null && !PlatformKeys.HasCommand(e.KeyModifiers))
             {
                 var moved = new Rect(_moveOriginBounds.X + dx, _moveOriginBounds.Y + dy,
                                      _moveOriginBounds.Width, _moveOriginBounds.Height);
@@ -1303,7 +1316,7 @@ public class GtCanvasControl : Control
                     ? StandardCursorType.SizeWestEast
                     : StandardCursorType.SizeNorthSouth);
             }
-            else if (ActiveTool == CanvasTool.Edit)
+            else if (ActiveTool == CanvasTool.Edit || ActiveTool == CanvasTool.Select)
             {
                 var (_, el) = HitTest(docPt);
                 Cursor = (el is not null && _selectedElements.Contains(el))
@@ -2127,57 +2140,101 @@ public class GtCanvasControl : Control
         if (anim is not null && (anim.Hidden || anim.OpacityMul <= 0 ||
                                  anim.ScaleX <= 0 || anim.ScaleY <= 0)) return;
 
-        // resolve mask: clip masked element to mask element's geometry (text glyphs or rect); the mask is a live object so its own animation drives the clip too, Fly/Zoom move and scale the geometry, Reveal wipes it, and Fade dims what shows through; a geometry clip is binary so the mask's animated alpha is folded in as an opacity push instead
-        Geometry? maskGeom   = null;
-        Rect?     maskReveal = null;
-        double    maskAlpha  = 1.0;
+        // resolve mask the way GT's engine does (GraphicsObject.OnCompose): the mask object is composed in full - fill, bitmap
+        // alpha, gradient, crop, effects, its opacity and its own animation - and only what it actually draws lets the masked
+        // object through. A mask object that is not visible masks nothing, so the object draws whole. Only the rendering is
+        // per-pixel here; the file still stores nothing but <Mask Object="Name" />
         if (element.MaskObject is not null &&
             layerElements.TryGetValue(element.MaskObject, out var maskEl) &&
-            !ReferenceEquals(maskEl, element))
+            !ReferenceEquals(maskEl, element) && maskEl.Visible)
         {
             var maskAnim = _animationFrame?.ForElement(maskEl);
-            if (maskAnim is not null)
+            // a mask that has animated itself out of existence masks everything away
+            if (maskEl.Opacity <= 0) return;
+            if (maskAnim is not null && (maskAnim.Hidden || maskAnim.OpacityMul <= 0 ||
+                                         maskAnim.ScaleX <= 0 || maskAnim.ScaleY <= 0)) return;
+
+            // text already cuts by its exact glyph outline, so only the other kinds need recording
+            bool outlineIsExact = maskEl is GtTextBlock and not GtTickerElement;
+            if (!outlineIsExact && BuildMaskBrush(maskEl, maskAnim, localCanvas, localLayer) is { } mask)
             {
-                // a mask that has animated itself out of existence masks everything away
-                if (maskAnim.Hidden || maskAnim.ScaleX <= 0 || maskAnim.ScaleY <= 0) return;
-
-                maskAlpha = Math.Clamp(maskAnim.OpacityMul, 0.0, 1.0);
-                if (maskAlpha <= 0) return;
-
-                // a geometry clip cannot carry the mask's feathered crop, so a Reveal on the mask contributes its hard-edged rectangle instead
-                if (maskAnim.HasCrop)
-                {
-                    var mr = GtAnimationEvaluator.CropClip(AnimatedBounds(maskEl, maskAnim), maskAnim);
-                    if (mr.Width <= 0 || mr.Height <= 0) return;
-                    maskReveal = mr;
-                }
+                if (mask.Bounds.Width <= 0 || mask.Bounds.Height <= 0) return;
+                using (ctx.PushClip(new RoundedRect(mask.Bounds)))
+                using (ctx.PushOpacityMask(mask.Brush, mask.Bounds))
+                    RenderElementBodySkewed(ctx, element, anim, localCanvas, localLayer);
+                return;
             }
 
-            maskGeom = BuildMaskGeometry(maskEl, maskAnim);
-        }
-
-        // a Reveal on the element itself needs no scope here: it drives the element's crop range, so it is applied by the feathered crop pipeline in RenderCore
-        if (maskGeom is null && maskAlpha >= 1.0)
-        {
-            RenderElementBody(ctx, element, localCanvas, localLayer);
+            RenderElementGeometryMasked(ctx, element, anim, maskEl, maskAnim, localCanvas, localLayer);
             return;
         }
 
-        // clips and opacity nest, so they are pushed in order and unwound in reverse
+        RenderElementBodySkewed(ctx, element, anim, localCanvas, localLayer);
+    }
+
+    /// <summary>
+    /// the mask object drawn exactly as the canvas draws it, recorded into a drawing and used as an opacity mask: its alpha
+    /// is the mask. Null when the drawing cannot be recorded (a drawing context that refuses an operation the object needs),
+    /// in which case the caller falls back to the outline clip
+    /// </summary>
+    private readonly HashSet<string> _maskRecordFailures = new(StringComparer.Ordinal);
+
+    private (IBrush Brush, Rect Bounds)? BuildMaskBrush(GtElement maskEl, GtAnimOverride? maskAnim, Rect localCanvas, Rect? localLayer)
+    {
+        try
+        {
+            var group = new DrawingGroup();
+            using (var mctx = group.Open())
+                RenderElementBodySkewed(mctx, maskEl, maskAnim, localCanvas, localLayer);
+
+            var bounds = group.GetBounds();
+            if (bounds.Width <= 0 || bounds.Height <= 0) return (Brushes.Transparent, default);
+
+            var brush = new DrawingBrush(group)
+            {
+                Stretch         = Stretch.None,
+                AlignmentX      = AlignmentX.Left,
+                AlignmentY      = AlignmentY.Top,
+                SourceRect      = new RelativeRect(bounds, RelativeUnit.Absolute),
+                DestinationRect = new RelativeRect(bounds, RelativeUnit.Absolute),
+                TileMode        = TileMode.None,
+            };
+            return (brush, bounds);
+        }
+        catch (Exception ex)
+        {
+            if (_maskRecordFailures.Add(maskEl.Name))
+                Logger.Warn($"mask '{maskEl.Name}' could not be recorded, using its outline: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>the previous outline-only mask: glyphs for text, the ellipse, otherwise the box; kept as the fallback for <see cref="BuildMaskBrush"/></summary>
+    private void RenderElementGeometryMasked(DrawingContext ctx, GtElement element, GtAnimOverride? anim,
+                                             GtElement maskEl, GtAnimOverride? maskAnim, Rect localCanvas, Rect? localLayer)
+    {
+        Rect?  maskReveal = null;
+        double maskAlpha  = Math.Clamp(maskEl.Opacity * (maskAnim?.OpacityMul ?? 1.0), 0.0, 1.0);
+        if (maskAnim is not null && maskAnim.HasCrop)
+        {
+            var mr = GtAnimationEvaluator.CropClip(AnimatedBounds(maskEl, maskAnim), maskAnim);
+            if (mr.Width <= 0 || mr.Height <= 0) return;
+            maskReveal = mr;
+        }
+        var maskGeom = BuildMaskGeometry(maskEl, maskAnim);
+
         var scopes = new List<IDisposable>(3);
         try
         {
-            // a fading mask dims the element it masks, and that dimming has to reach its shadow once rather than twice, same as its own opacity does
             if (maskAlpha < 1.0)
             {
-                var scope = PushComposedOpacity(ctx, maskAlpha, element,
-                                                AnimatedBounds(element, anim));
+                var scope = PushComposedOpacity(ctx, maskAlpha, element, AnimatedBounds(element, anim));
                 if (scope is not null) scopes.Add(scope);
             }
-            if (maskGeom is not null) scopes.Add(ctx.PushGeometryClip(maskGeom));
+            scopes.Add(ctx.PushGeometryClip(maskGeom));
             if (maskReveal is { } mrc) scopes.Add(ctx.PushClip(new RoundedRect(mrc)));
 
-            RenderElementBody(ctx, element, localCanvas, localLayer);
+            RenderElementBodySkewed(ctx, element, anim, localCanvas, localLayer);
         }
         finally
         {
@@ -2213,18 +2270,25 @@ public class GtCanvasControl : Control
     private static Geometry BuildMaskGeometry(GtElement maskEl, GtAnimOverride? maskAnim)
     {
         var geom = BuildRestMaskGeometry(maskEl);
-
-        if (maskAnim is null || !maskAnim.HasBoxTransform) return geom;
-
-        // same transform AnimatedBounds applies to a box: scale about the animation's anchor then translate, applied to the geometry so glyph outlines move with the mask too
         var rest = new Rect(maskEl.Location.X, maskEl.Location.Y,
                             maskEl.Dimensions.Width, maskEl.Dimensions.Height);
-        double ax = rest.X + rest.Width  * maskAnim.ScaleAnchorX;
-        double ay = rest.Y + rest.Height * maskAnim.ScaleAnchorY;
-        geom.Transform = new MatrixTransform(
-            Matrix.CreateTranslation(-ax, -ay)
-          * Matrix.CreateScale(maskAnim.ScaleX, maskAnim.ScaleY)
-          * Matrix.CreateTranslation(ax + maskAnim.OffsetX, ay + maskAnim.OffsetY));
+        var matrix = Matrix.Identity;
+
+        if (maskAnim is not null && maskAnim.HasBoxTransform)
+        {
+            // same transform AnimatedBounds applies to a box: scale about the animation's anchor then translate, applied to the geometry so glyph outlines move with the mask too
+            double ax = rest.X + rest.Width  * maskAnim.ScaleAnchorX;
+            double ay = rest.Y + rest.Height * maskAnim.ScaleAnchorY;
+            matrix = Matrix.CreateTranslation(-ax, -ay)
+                   * Matrix.CreateScale(maskAnim.ScaleX, maskAnim.ScaleY)
+                   * Matrix.CreateTranslation(ax + maskAnim.OffsetX, ay + maskAnim.OffsetY);
+        }
+
+        // a skewed or flipped mask cuts the same reshaped outline the mask object is drawn with, taken about where its box has moved to
+        var moved = matrix.IsIdentity ? rest : rest.TransformToAABB(matrix);
+        matrix *= GtReplaceEffects.Matrix(maskEl.Effects, moved);
+
+        if (!matrix.IsIdentity) geom.Transform = new MatrixTransform(matrix);
         return geom;
     }
 
@@ -2249,6 +2313,28 @@ public class GtCanvasControl : Control
         return new RectangleGeometry(new Rect(
             maskEl.Location.X, maskEl.Location.Y,
             maskEl.Dimensions.Width, maskEl.Dimensions.Height));
+    }
+
+    /// <summary>
+    /// where this editor's text layout puts a text block's first line, relative to the top-left of its box: the left edge and
+    /// width of the line and its baseline. Used to place imported text (a PSD stores point text by its first baseline) so it
+    /// lands exactly where its source had it, whatever the font's metrics and the block's line spacing do to the line box
+    /// </summary>
+    public static (double LineLeft, double LineWidth, double Baseline)? FirstLineGeometry(GtTextBlock tb)
+    {
+        var resolved = GtTextFormat.Resolve(tb.Text);
+        if (string.IsNullOrEmpty(resolved)) return null;
+        var text     = tb.Uppercase ? resolved.ToUpper() : resolved;
+        var typeface = new Typeface(new FontFamily(tb.FontFamily), tb.FontStyle, tb.FontWeight);
+        var bounds   = new Rect(0, 0, Math.Max(tb.Dimensions.Width, 1), Math.Max(tb.Dimensions.Height, 1));
+
+        var plan = ResolveTextPlan(tb, text, typeface, bounds);
+        if (LayOutText(text, typeface, tb, plan, bounds, Brushes.White) is not { } laid) return null;
+        if (laid.Lines.Count == 0 || laid.Origins.Length == 0) return null;
+
+        var line   = laid.Lines[0];
+        var origin = laid.Origins[0] + laid.Offset + StrokeOriginShift(tb);
+        return (origin.X + line.Start, line.WidthIncludingTrailingWhitespace, origin.Y + line.Baseline);
     }
 
     /// <summary>glyph outlines for a text mask, laid out through the same pipeline <see cref="RenderTextBlock"/> uses, so line spacing, wrapping, uppercase, the auto-size coercions, the overhang nudge and the stroke all put the mask exactly where the text draws; a one-shot FormattedText cannot do that since GT's LineSpacing divorces the line box from the font's and moves every line including the first (see <see cref="LineBox"/>). Returns null when the block lays out to nothing</summary>
@@ -2321,6 +2407,54 @@ public class GtCanvasControl : Control
             : (element.RotateX + anim.RotateX,
                element.RotateY + anim.RotateY,
                element.RotateZ + anim.RotateZ);
+
+    /// <summary>draws the element through its Replace-stage effects (texture flips and skew, in list order) and, behind it, its Reflection; everything is taken about the element's animated box so a Fly or Zoom carries it along, and it is all pushed inside any mask clip because GT reshapes the object's own image, not the mask cut out of it</summary>
+    private void RenderElementBodySkewed(DrawingContext ctx, GtElement element, GtAnimOverride? anim,
+                                         Rect localCanvas, Rect? localLayer)
+    {
+        var bounds  = AnimatedBounds(element, anim);
+        var reshape = GtReplaceEffects.Matrix(element.Effects, bounds);
+
+        // the Finish stage composites the reflection behind the finished object, so it is drawn first
+        if (GtReflection.First(element.Effects) is { Depth: > 0 } reflection)
+            RenderReflection(ctx, element, bounds, reshape, Math.Min(reflection.Depth, 1.0), localCanvas, localLayer);
+
+        if (reshape.IsIdentity)
+        {
+            RenderElementBody(ctx, element, localCanvas, localLayer);
+            return;
+        }
+
+        using (ctx.PushTransform(reshape))
+            RenderElementBody(ctx, element, localCanvas, localLayer);
+    }
+
+    /// <summary>the object again, mirrored about its bottom edge and faded from <see cref="GtReflection.StartAlpha"/> where it touches the object to nothing <paramref name="depth"/> of its height further down; the band is as wide as anything the object can lean or glow into</summary>
+    private void RenderReflection(DrawingContext ctx, GtElement element, Rect bounds, Matrix reshape,
+                                  double depth, Rect localCanvas, Rect? localLayer)
+    {
+        double reach = bounds.Height * depth;
+        if (reach < 0.5) return;
+
+        var band = new Rect(bounds.X - ClipOverflowMargin, bounds.Bottom,
+                            bounds.Width + 2 * ClipOverflowMargin, reach);
+        var fade = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint   = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops =
+            {
+                new GradientStop(Color.FromArgb((byte)Math.Round(255 * GtReflection.StartAlpha), 255, 255, 255), 0),
+                new GradientStop(Color.FromArgb(0, 255, 255, 255), 1),
+            },
+        }.ToImmutable();
+
+        using (ctx.PushClip(new RoundedRect(band)))
+        using (ctx.PushOpacityMask(fade, band))
+        using (ctx.PushTransform(GtReflection.MirrorMatrix(bounds)))
+        using (ctx.PushTransform(reshape))
+            RenderElementBody(ctx, element, localCanvas, localLayer);
+    }
 
     private void RenderElementBody(DrawingContext ctx, GtElement element, Rect localCanvas, Rect? localLayer)
     {

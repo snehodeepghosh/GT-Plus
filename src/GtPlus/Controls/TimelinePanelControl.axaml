@@ -63,199 +63,218 @@
                            HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
 
-            <!-- the one timeline bar: storyboard picker, transport, clip controls, zoom -->
-            <Border DockPanel.Dock="Top" Background="#1a1a1a" Padding="8,4"
-                    BorderBrush="#333333" BorderThickness="0,0,0,1">
-                <Grid ColumnDefinitions="*,Auto,Auto">
+            <!-- the timeline bar: storyboard and commands, transport, the selected clip's settings, direction, and zoom.
+                 It never scrolls: the groups wrap onto more lines as the panel narrows, and the grip under it pulls the bar
+                 taller or shorter (double-click the grip to fit it to its contents again) -->
+            <Border x:Name="BarHost" DockPanel.Dock="Top" Background="#1a1a1a" Padding="8,4" ClipToBounds="True">
+                <DockPanel>
+                    <!-- zoom, detach and close stay pinned at the right whatever wraps -->
+                    <StackPanel DockPanel.Dock="Right" VerticalAlignment="Top" Orientation="Horizontal" Spacing="6"
+                                    Margin="10,2,0,0">
 
-                    <!-- the bar is two rows deep, which is what the 3x3 direction pad makes it anyway: the storyboard and what the clip is on top, the transport and the clip's timing below. Nothing is ever hidden, controls that do not apply to the selected clip grey out instead, and both rows scroll together so a narrow window slides them as one -->
-                    <ScrollViewer Grid.Column="0"
-                                  HorizontalScrollBarVisibility="Auto"
-                                  VerticalScrollBarVisibility="Disabled"
-                                  VerticalAlignment="Center">
-                        <!-- one grid for both rows, so the columns line up down the bar: the clip's input boxes start at the same x whichever row they are on, and a label that grows only pushes its own column -->
-                        <Grid RowDefinitions="Auto,Auto"
-                              ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"
-                              RowSpacing="4" ColumnSpacing="6">
+                            <!-- GT's three-animations-per-object limit is reported here -->
+                            <TextBlock x:Name="LimitLabel" Text="" FontSize="11"
+                                       Foreground="#e0a24d" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" MaxWidth="220"
+                                       IsVisible="False" />
 
-                            <!-- row 1, lead: which storyboard, and the commands that act on it -->
-                            <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Spacing="6"
-                                        VerticalAlignment="Center">
+                            <Slider x:Name="ZoomSlider"
+                                    Minimum="12" Maximum="600" Value="70" Width="90"
+                                    VerticalAlignment="Center"
+                                    ToolTip.Tip="Timeline zoom"
+                                    ValueChanged="ZoomSlider_ValueChanged" />
 
-                                <TextBlock Text="TIMELINE" FontSize="10" FontWeight="SemiBold"
-                                           Foreground="#4d9ae0" VerticalAlignment="Center" Margin="0,0,4,0" />
+                            <!-- pops the timeline out into its own window (e.g. onto a second monitor), and docks it back from there -->
+                            <Button x:Name="DetachButton" Padding="6,3" VerticalAlignment="Center"
+                                    ToolTip.Tip="Detach the timeline into its own window" Click="Detach_Click">
+                                <Path x:Name="DetachGlyph" Width="14" Height="14" Stretch="Uniform"
+                                      Stroke="#cccccc" StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round"
+                                      Data="M 10,3 L 21,3 L 21,14 M 21,3 L 11,13 M 17,13 L 17,21 L 3,21 L 3,7 L 11,7" />
+                            </Button>
+                            <Button Content="✕" FontSize="11" Padding="7,2"
+                                    VerticalAlignment="Center"
+                                    ToolTip.Tip="Close timeline (Ctrl+T)" Click="Close_Click" />
+                    </StackPanel>
 
-                                <!-- fixed width, not MinWidth: sized to the picker it holds, the combo would otherwise grow and shrink with the selected storyboard's name and shove the whole row sideways -->
-                                <ComboBox x:Name="StoryboardCombo" Width="215" FontSize="11"
-                                          Padding="6,2" VerticalAlignment="Center"
-                                          ToolTip.Tip="Storyboard to preview and edit. A filled dot marks one that already has animations."
-                                          SelectionChanged="StoryboardCombo_SelectionChanged">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate x:DataType="controls:TimelineView">
-                                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                                <!-- filled = has animations, hollow = empty -->
-                                                <Ellipse Width="7" Height="7" VerticalAlignment="Center"
-                                                         Fill="#4d9ae0"
-                                                         IsVisible="{Binding HasAnimations}" />
-                                                <Ellipse Width="7" Height="7" VerticalAlignment="Center"
-                                                         Stroke="#5a5a5a" StrokeThickness="1"
-                                                         IsVisible="{Binding !HasAnimations}" />
-                                                <TextBlock Text="{Binding Label}" VerticalAlignment="Center"
-                                                           TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="{Binding CountText}" Foreground="#777777"
-                                                           VerticalAlignment="Center" />
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
+                    <WrapPanel x:Name="BarWrap" Orientation="Horizontal" ItemSpacing="18" LineSpacing="6">
 
-                                <Button x:Name="NewStoryboardButton" Content="+" FontSize="12"
-                                        Padding="8,1" VerticalAlignment="Center"
-                                        ToolTip.Tip="Create a storyboard"
-                                        Click="NewStoryboard_Click" />
+                        <!-- storyboard picker over the transport; every item hangs from the top so first lines line up -->
+                        <StackPanel Spacing="4" VerticalAlignment="Top">
+                            <StackPanel Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
 
+                                    <TextBlock Text="TIMELINE" FontSize="10" FontWeight="SemiBold"
+                                               Foreground="#4d9ae0" VerticalAlignment="Center" Margin="0,0,4,0" />
+
+                                    <!-- fixed width, not MinWidth: sized to the picker it holds, the combo would otherwise grow and shrink with the selected storyboard's name and shove the whole row sideways -->
+                                    <ComboBox x:Name="StoryboardCombo" Width="215" FontSize="11"
+                                              Padding="6,2" VerticalAlignment="Center"
+                                              ToolTip.Tip="Storyboard to preview and edit. A filled dot marks one that already has animations."
+                                              SelectionChanged="StoryboardCombo_SelectionChanged">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="controls:TimelineView">
+                                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                    <!-- filled = has animations, hollow = empty -->
+                                                    <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                                             Fill="#4d9ae0"
+                                                             IsVisible="{Binding HasAnimations}" />
+                                                    <Ellipse Width="7" Height="7" VerticalAlignment="Center"
+                                                             Stroke="#5a5a5a" StrokeThickness="1"
+                                                             IsVisible="{Binding !HasAnimations}" />
+                                                    <TextBlock Text="{Binding Label}" VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding CountText}" Foreground="#777777"
+                                                               VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+
+                                    <Button x:Name="NewStoryboardButton" Content="+" FontSize="12"
+                                            Padding="8,1" VerticalAlignment="Center"
+                                            ToolTip.Tip="Create a storyboard"
+                                            Click="NewStoryboard_Click" />
+
+    
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="6"
+                                            VerticalAlignment="Center">
+
+                                    <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                        <Button x:Name="PlayButton" Width="28" Padding="0,2"
+                                                ToolTip.Tip="Play / pause (Space)" Click="Play_Click">
+                                            <Image x:Name="PlayIcon"
+                                                   Source="avares://GtPlus/Assets/Icons/play.png"
+                                                   Width="14" Height="14" VerticalAlignment="Center" />
+                                        </Button>
+                                        <Button x:Name="StopButton" Width="28" Padding="0,2"
+                                                ToolTip.Tip="Stop and rewind" Click="Stop_Click">
+                                            <Image Source="avares://GtPlus/Assets/Icons/stop.png"
+                                                   Width="14" Height="14" VerticalAlignment="Center" />
+                                        </Button>
+                                        <ToggleButton x:Name="LoopButton" Width="28" Padding="0,2"
+                                                      ToolTip.Tip="Loop playback">
+                                            <Image Source="avares://GtPlus/Assets/Icons/repeat.png"
+                                                   Width="14" Height="14" VerticalAlignment="Center" />
+                                        </ToggleButton>
+                                        <ToggleButton x:Name="PreviewButton" Width="28" Padding="0,2"
+                                                      IsChecked="False" Margin="6,0,0,0"
+                                                      ToolTip.Tip="Preview the storyboard on the canvas. Objects stay editable: a move or resize made here is solved back onto the resting geometry, and the storyboard is re-evaluated as you drag."
+                                                      IsCheckedChanged="Preview_Changed">
+                                            <Image Source="avares://GtPlus/Assets/Icons/preview.png"
+                                                   Width="14" Height="14" VerticalAlignment="Center" />
+                                        </ToggleButton>
+                                    </StackPanel>
+
+                                    <!-- both readouts are as wide as their longest reading and no wider: their text changes every frame during playback, and left to size themselves they would shove Hold and the whole timing strip sideways as they grew -->
+                                    <TextBlock x:Name="TimeLabel" Text="0.00 / 0.00s" Width="110"
+                                               FontFamily="Consolas,Courier New,monospace" FontSize="11"
+                                               Foreground="#cccccc" VerticalAlignment="Center" Margin="4,0,0,0"
+                                               TextTrimming="CharacterEllipsis" />
+
+                                    <TextBlock x:Name="FpsLabel" Text="-- fps" Width="130"
+                                               FontFamily="Consolas,Courier New,monospace" FontSize="11"
+                                               Foreground="#666666" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="Frames the canvas actually painted per second during playback, and the average time spent drawing one frame" />
+
+                                    <!-- only meaningful for the combined TransitionIn + TransitionOut view -->
+                                    <StackPanel x:Name="HoldPanel" Orientation="Horizontal" Spacing="4"
+                                                VerticalAlignment="Center" IsVisible="False">
+                                        <TextBlock x:Name="HoldLabel" Text="Hold" FontSize="11" Foreground="#888888"
+                                                   VerticalAlignment="Center" Margin="6,0,0,0"
+                                                   ToolTip.Tip="Drag left/right to scrub. Alt = fine, Shift = coarse." />
+                                        <TextBox x:Name="HoldBox" Width="48" FontSize="11" Padding="5,1"
+                                                 ToolTip.Tip="Seconds the template stays live before TransitionOut plays (preview only)"
+                                                 LostFocus="HoldBox_Changed" KeyDown="HoldBox_KeyDown" />
+                                    </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+
+
+                        <!-- commands on the storyboard: their own item, so they wrap below the picker in a narrow panel -->
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Top" Margin="0,1,0,0">
                                 <Button x:Name="AddButton" Content="+ Animation" FontSize="11" Padding="8,2"
-                                        VerticalAlignment="Center" Margin="4,0,0,0"
-                                        ToolTip.Tip="Add an animation for every selected object. Right-click to pick the animation type."
-                                        Click="AddAnimation_Click"
-                                        ContextRequested="AddAnimation_ContextRequested" />
-                                <Button x:Name="AddSequenceButton" Content="+ Sequence" FontSize="11" Padding="8,2"
-                                        IsEnabled="False" VerticalAlignment="Center"
-                                        ToolTip.Tip="Add an ImageSequence animation for the selected image sequence and set its length. Needs a storyboard on the timeline to add to."
-                                        Click="AddSequenceAnimation_Click" />
-                                <Button x:Name="DeleteButton" Content="Delete" FontSize="11" Padding="8,2"
-                                        IsEnabled="False" VerticalAlignment="Center"
-                                        ToolTip.Tip="Delete the selected animation"
-                                        Click="DeleteAnimation_Click" />
-                                <Button x:Name="SequenceLengthButton" Content="Frames..." FontSize="11" Padding="8,2"
-                                        VerticalAlignment="Center" IsEnabled="False"
-                                        ToolTip.Tip="Set the clip length from the sequence's frame count and a target frame rate"
-                                        Click="SequenceLength_Click" />
-                            </StackPanel>
+                                            VerticalAlignment="Center"
+                                            ToolTip.Tip="Add an animation for every selected object. Right-click to pick the animation type."
+                                            Click="AddAnimation_Click"
+                                            ContextRequested="AddAnimation_ContextRequested" />
+                                    <Button x:Name="AddSequenceButton" Content="+ Sequence" FontSize="11" Padding="8,2"
+                                            IsEnabled="False" VerticalAlignment="Center"
+                                            ToolTip.Tip="Add an ImageSequence animation for the selected image sequence and set its length. Needs a storyboard on the timeline to add to."
+                                            Click="AddSequenceAnimation_Click" />
+                                    <Button x:Name="DeleteButton" Content="Delete" FontSize="11" Padding="8,2"
+                                            IsEnabled="False" VerticalAlignment="Center"
+                                            ToolTip.Tip="Delete the selected animation"
+                                            Click="DeleteAnimation_Click" />
+                                    <Button x:Name="SequenceLengthButton" Content="Frames..." FontSize="11" Padding="8,2"
+                                            VerticalAlignment="Center" IsEnabled="False"
+                                            ToolTip.Tip="Set the clip length from the sequence's frame count and a target frame rate"
+                                            Click="SequenceLength_Click" />
+                        </StackPanel>
 
-                            <TextBlock x:Name="ObjectLabel" Grid.Row="0" Grid.Column="3"
-                                       Text="Object" FontSize="11" Foreground="#888888"
-                                       VerticalAlignment="Center" IsEnabled="False" />
-                            <ComboBox x:Name="ObjectCombo" Grid.Row="0" Grid.Column="4"
-                                      MinWidth="130" FontSize="11" Padding="6,1"
-                                      HorizontalAlignment="Left" IsEnabled="False"
-                                      SelectionChanged="AnimationProperty_Changed" />
-
-                            <!-- shown only while more than one clip is selected; it sits past the last pair of columns so lighting up never moves a control -->
-                            <Border x:Name="SelectionBadge" Grid.Row="0" Grid.Column="7"
-                                    Background="#24405c" CornerRadius="3"
-                                    Padding="6,2" VerticalAlignment="Center" HorizontalAlignment="Right"
-                                    IsVisible="False" IsEnabled="False"
-                                    ToolTip.Tip="Edits in this strip apply to every selected clip">
-                                <TextBlock x:Name="SelectionLabel" Text="" FontSize="11"
-                                           Foreground="#9ccdf5" VerticalAlignment="Center" />
+                        <!-- the selected clip: one grid so labels and boxes line up across both lines -->
+                        <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+                              RowSpacing="4" ColumnSpacing="6" VerticalAlignment="Top">
+                            <TextBlock x:Name="TypeLabel" Grid.Row="0" Grid.Column="0"
+                                Text="Type" FontSize="11" Foreground="#888888"
+                                VerticalAlignment="Center" IsEnabled="False" />
+                            <ComboBox x:Name="TypeCombo" Grid.Row="0" Grid.Column="1"
+                                MinWidth="120" FontSize="11" Padding="6,1"
+                                HorizontalAlignment="Left" IsEnabled="False"
+                                SelectionChanged="AnimationProperty_Changed" />
+                            <TextBlock x:Name="ObjectLabel" Grid.Row="0" Grid.Column="2"
+                                Text="Object" FontSize="11" Foreground="#888888"
+                                VerticalAlignment="Center" IsEnabled="False" />
+                            <ComboBox x:Name="ObjectCombo" Grid.Row="0" Grid.Column="3"
+                                MinWidth="130" FontSize="11" Padding="6,1"
+                                HorizontalAlignment="Left" IsEnabled="False"
+                                SelectionChanged="AnimationProperty_Changed" />
+                            <TextBlock x:Name="EasingLabel" Grid.Row="0" Grid.Column="4"
+                                Text="Easing" FontSize="11" Foreground="#888888"
+                                VerticalAlignment="Center" IsEnabled="False" />
+                            <ComboBox x:Name="EasingCombo" Grid.Row="0" Grid.Column="5"
+                                MinWidth="130" FontSize="11" Padding="6,1"
+                                HorizontalAlignment="Left" IsEnabled="False"
+                                SelectionChanged="AnimationProperty_Changed" />
+                            <Border x:Name="SelectionBadge" Grid.Row="0" Grid.Column="6"
+                                        Background="#24405c" CornerRadius="3"
+                                        Padding="6,2" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                        IsVisible="False" IsEnabled="False"
+                                        ToolTip.Tip="Edits in this strip apply to every selected clip">
+                                    <TextBlock x:Name="SelectionLabel" Text="" FontSize="11"
+                                               Foreground="#9ccdf5" VerticalAlignment="Center" />
                             </Border>
-
-                            <TextBlock x:Name="EasingLabel" Grid.Row="0" Grid.Column="5"
-                                       Text="Easing" FontSize="11" Foreground="#888888"
-                                       VerticalAlignment="Center" IsEnabled="False" />
-                            <ComboBox x:Name="EasingCombo" Grid.Row="0" Grid.Column="6"
-                                      MinWidth="130" FontSize="11" Padding="6,1"
-                                      HorizontalAlignment="Left" IsEnabled="False"
-                                      SelectionChanged="AnimationProperty_Changed" />
-
-                            <!-- row 2, lead: transport and the readouts -->
-                            <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" Spacing="6"
-                                        VerticalAlignment="Center">
-
-                                <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
-                                    <Button x:Name="PlayButton" Width="28" Padding="0,2"
-                                            ToolTip.Tip="Play / pause (Space)" Click="Play_Click">
-                                        <Image x:Name="PlayIcon"
-                                               Source="avares://GtPlus/Assets/Icons/play.png"
-                                               Width="14" Height="14" VerticalAlignment="Center" />
-                                    </Button>
-                                    <Button x:Name="StopButton" Width="28" Padding="0,2"
-                                            ToolTip.Tip="Stop and rewind" Click="Stop_Click">
-                                        <Image Source="avares://GtPlus/Assets/Icons/stop.png"
-                                               Width="14" Height="14" VerticalAlignment="Center" />
-                                    </Button>
-                                    <ToggleButton x:Name="LoopButton" Width="28" Padding="0,2"
-                                                  ToolTip.Tip="Loop playback">
-                                        <Image Source="avares://GtPlus/Assets/Icons/repeat.png"
-                                               Width="14" Height="14" VerticalAlignment="Center" />
-                                    </ToggleButton>
-                                    <ToggleButton x:Name="PreviewButton" Width="28" Padding="0,2"
-                                                  IsChecked="False" Margin="6,0,0,0"
-                                                  ToolTip.Tip="Preview the storyboard on the canvas. Objects stay editable: a move or resize made here is solved back onto the resting geometry, and the storyboard is re-evaluated as you drag."
-                                                  IsCheckedChanged="Preview_Changed">
-                                        <Image Source="avares://GtPlus/Assets/Icons/preview.png"
-                                               Width="14" Height="14" VerticalAlignment="Center" />
-                                    </ToggleButton>
-                                </StackPanel>
-
-                                <!-- both readouts are as wide as their longest reading and no wider: their text changes every frame during playback, and left to size themselves they would shove Hold and the whole timing strip sideways as they grew -->
-                                <TextBlock x:Name="TimeLabel" Text="0.00 / 0.00s" Width="110"
-                                           FontFamily="Consolas,Courier New,monospace" FontSize="11"
-                                           Foreground="#cccccc" VerticalAlignment="Center" Margin="4,0,0,0"
-                                           TextTrimming="CharacterEllipsis" />
-
-                                <TextBlock x:Name="FpsLabel" Text="-- fps" Width="130"
-                                           FontFamily="Consolas,Courier New,monospace" FontSize="11"
-                                           Foreground="#666666" VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"
-                                           ToolTip.Tip="Frames the canvas actually painted per second during playback, and the average time spent drawing one frame" />
-
-                                <!-- only meaningful for the combined TransitionIn + TransitionOut view -->
-                                <StackPanel x:Name="HoldPanel" Orientation="Horizontal" Spacing="4"
-                                            VerticalAlignment="Center" IsVisible="False">
-                                    <TextBlock x:Name="HoldLabel" Text="Hold" FontSize="11" Foreground="#888888"
-                                               VerticalAlignment="Center" Margin="6,0,0,0"
-                                               ToolTip.Tip="Drag left/right to scrub. Alt = fine, Shift = coarse." />
-                                    <TextBox x:Name="HoldBox" Width="48" FontSize="11" Padding="5,1"
-                                             ToolTip.Tip="Seconds the template stays live before TransitionOut plays (preview only)"
-                                             LostFocus="HoldBox_Changed" KeyDown="HoldBox_KeyDown" />
-                                </StackPanel>
-                            </StackPanel>
-
-                            <TextBlock x:Name="TypeLabel" Grid.Row="0" Grid.Column="1"
-                                       Text="Type" FontSize="11" Foreground="#888888"
-                                       VerticalAlignment="Center" IsEnabled="False" />
-                            <ComboBox x:Name="TypeCombo" Grid.Row="0" Grid.Column="2"
-                                      MinWidth="120" FontSize="11" Padding="6,1"
-                                      HorizontalAlignment="Left" IsEnabled="False"
-                                      SelectionChanged="AnimationProperty_Changed" />
-
-                            <TextBlock x:Name="DelayLabel" Grid.Row="1" Grid.Column="1"
-                                       Text="Delay" FontSize="11" Foreground="#888888"
-                                       VerticalAlignment="Center" IsEnabled="False"
-                                       ToolTip.Tip="Drag left/right to scrub. Alt = fine, Shift = coarse." />
-                            <TextBox x:Name="DelayBox" Grid.Row="1" Grid.Column="2"
-                                     Width="56" FontSize="11" Padding="5,1"
-                                     HorizontalAlignment="Left" IsEnabled="False"
-                                     ToolTip.Tip="Seconds before the animation starts. Negative delays are pre-roll: vMix computes the animation before the title goes live, so it is already part-way through at 0."
-                                     LostFocus="AnimationTiming_Committed" KeyDown="TimingBox_KeyDown" />
-
-                            <TextBlock x:Name="DurationLabel" Grid.Row="1" Grid.Column="3"
-                                       Text="Duration" FontSize="11" Foreground="#888888"
-                                       VerticalAlignment="Center" IsEnabled="False"
-                                       ToolTip.Tip="Drag left/right to scrub. Alt = fine, Shift = coarse." />
-                            <TextBox x:Name="DurationBox" Grid.Row="1" Grid.Column="4"
-                                     Width="56" FontSize="11" Padding="5,1"
-                                     HorizontalAlignment="Left" IsEnabled="False"
-                                     LostFocus="AnimationTiming_Committed" KeyDown="TimingBox_KeyDown" />
-
-                            <!-- Duration and Speed are alternatives, a continuous animation runs off one and everything else off the other, but both keep their place so the strip does not shuffle when the type changes -->
-                            <TextBlock x:Name="SpeedLabel" Grid.Row="1" Grid.Column="5"
-                                       Text="Speed" FontSize="11" Foreground="#888888"
-                                       VerticalAlignment="Center" IsEnabled="False"
-                                       ToolTip.Tip="Drag left/right to scrub. Alt = fine, Shift = coarse." />
-                            <TextBox x:Name="SpeedBox" Grid.Row="1" Grid.Column="6"
-                                     Width="56" FontSize="11" Padding="5,1"
-                                     HorizontalAlignment="Left" IsEnabled="False"
-                                     ToolTip.Tip="Cycles per second: one full turn every 1/Speed seconds"
-                                     LostFocus="AnimationTiming_Committed" KeyDown="TimingBox_KeyDown" />
+                            <TextBlock x:Name="DelayLabel" Grid.Row="1" Grid.Column="0"
+                                Text="Delay" FontSize="11" Foreground="#888888"
+                                VerticalAlignment="Center" IsEnabled="False"
+                                ToolTip.Tip="Drag left/right to scrub. Alt = fine, Shift = coarse." />
+                            <TextBox x:Name="DelayBox" Grid.Row="1" Grid.Column="1"
+                                Width="56" FontSize="11" Padding="5,1"
+                                HorizontalAlignment="Left" IsEnabled="False"
+                                ToolTip.Tip="Seconds before the animation starts. Negative delays are pre-roll: vMix computes the animation before the title goes live, so it is already part-way through at 0."
+                                LostFocus="AnimationTiming_Committed" KeyDown="TimingBox_KeyDown" />
+                            <TextBlock x:Name="DurationLabel" Grid.Row="1" Grid.Column="2"
+                                Text="Duration" FontSize="11" Foreground="#888888"
+                                VerticalAlignment="Center" IsEnabled="False"
+                                ToolTip.Tip="Drag left/right to scrub. Alt = fine, Shift = coarse." />
+                            <TextBox x:Name="DurationBox" Grid.Row="1" Grid.Column="3"
+                                Width="56" FontSize="11" Padding="5,1"
+                                HorizontalAlignment="Left" IsEnabled="False"
+                                LostFocus="AnimationTiming_Committed" KeyDown="TimingBox_KeyDown" />
+                            <TextBlock x:Name="SpeedLabel" Grid.Row="1" Grid.Column="4"
+                                Text="Speed" FontSize="11" Foreground="#888888"
+                                VerticalAlignment="Center" IsEnabled="False"
+                                ToolTip.Tip="Drag left/right to scrub. Alt = fine, Shift = coarse." />
+                            <TextBox x:Name="SpeedBox" Grid.Row="1" Grid.Column="5"
+                                Width="56" FontSize="11" Padding="5,1"
+                                HorizontalAlignment="Left" IsEnabled="False"
+                                ToolTip.Tip="Cycles per second: one full turn every 1/Speed seconds"
+                                LostFocus="AnimationTiming_Committed" KeyDown="TimingBox_KeyDown" />
                         </Grid>
-                    </ScrollViewer>
 
-                    <!-- the pad is three buttons tall, so it stands beside both rows rather than setting the height of one -->
-                    <StackPanel x:Name="ClipPropertiesDirection" Grid.Column="1" Orientation="Horizontal"
-                                Spacing="8" VerticalAlignment="Center" Margin="12,0,0,0" IsEnabled="False">
+                        <StackPanel x:Name="ClipPropertiesDirection" Orientation="Horizontal"
+                                Spacing="8" VerticalAlignment="Center" IsEnabled="False">
 
                 <!-- GT's direction pad: the button's place in the grid is the direction, the arrow on it is the way the animation travels -->
                 <StackPanel x:Name="DirectionPanel" Orientation="Vertical" Spacing="2"
@@ -333,36 +352,30 @@
                                   VerticalAlignment="Center"
                                   IsCheckedChanged="AnimationProperty_Changed" />
                     </StackPanel>
+                    </WrapPanel>
+                </DockPanel>
+            </Border>
 
-                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6"
-                                VerticalAlignment="Center" Margin="10,0,0,0">
-
-                        <!-- GT's three-animations-per-object limit is reported here -->
-                        <TextBlock x:Name="LimitLabel" Text="" FontSize="11"
-                                   Foreground="#e0a24d" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" MaxWidth="220"
-                                   IsVisible="False" />
-
-                        <Slider x:Name="ZoomSlider"
-                                Minimum="12" Maximum="600" Value="70" Width="90"
-                                VerticalAlignment="Center"
-                                ToolTip.Tip="Timeline zoom"
-                                ValueChanged="ZoomSlider_ValueChanged" />
-
-                        <Button Content="✕" FontSize="11" Padding="7,2"
-                                VerticalAlignment="Center"
-                                ToolTip.Tip="Close timeline (Ctrl+T)" Click="Close_Click" />
-                    </StackPanel>
-                </Grid>
+            <!-- pull to resize the bar; double-click to fit it to its contents -->
+            <Border x:Name="BarGrip" DockPanel.Dock="Top" Height="6" Background="#1a1a1a"
+                    BorderBrush="#333333" BorderThickness="0,0,0,1" Cursor="SizeNorthSouth"
+                    ToolTip.Tip="Drag to make the timeline bar taller or shorter. Double-click to fit it to its contents."
+                    PointerPressed="BarGrip_PointerPressed"
+                    PointerMoved="BarGrip_PointerMoved"
+                    PointerReleased="BarGrip_PointerReleased"
+                    DoubleTapped="BarGrip_DoubleTapped">
+                <Rectangle Width="34" Height="2" RadiusX="1" RadiusY="1" Fill="#4a4a4a"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
 
             <!-- track area -->
             <ScrollViewer x:Name="TrackScroller"
                           HorizontalScrollBarVisibility="Auto"
                           VerticalScrollBarVisibility="Auto">
+                <!-- stretched so the rows and ruler fill the panel even when the storyboard is shorter than it is wide -->
                 <controls:TimelineTrackControl x:Name="Track"
-                                               HorizontalAlignment="Left"
-                                               VerticalAlignment="Top" />
+                                               HorizontalAlignment="Stretch"
+                                               VerticalAlignment="Stretch" />
             </ScrollViewer>
 
         </DockPanel>

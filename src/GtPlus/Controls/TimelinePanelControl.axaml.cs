@@ -100,6 +100,9 @@ public partial class TimelinePanelControl : UserControl
 
         Track.ContentShifted += OnTrackContentShifted;
 
+        // the track pins its ruler and name gutter to whatever part of it is on screen
+        TrackScroller.ScrollChanged += (_, _) => Track.ScrollOffset = TrackScroller.Offset;
+
         _playTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000.0 / TargetFps) };
         _playTimer.Tick += OnPlayTick;
 
@@ -150,6 +153,65 @@ public partial class TimelinePanelControl : UserControl
         _resizing = false;
         e.Pointer.Capture(null);
         e.Handled = true;
+    }
+
+    // ── bar grip: pull the timeline bar taller or shorter ───────────────
+
+    /// <summary>the bar never gets shorter than its first line, the storyboard picker and its commands</summary>
+    private const double MinBarHeight = 38;
+
+    /// <summary>room always left under the bar for the ruler and a couple of rows, so the bar cannot swallow the track</summary>
+    private const double MinTrackHeight = 74;
+
+    private bool _barResizing;
+    private double _barStartY;
+    private double _barStartHeight;
+
+    private void BarGrip_PointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+
+        _barResizing    = true;
+        _barStartY      = RootY(e);
+        _barStartHeight = BarHost.Bounds.Height;
+        e.Pointer.Capture(BarGrip);
+        e.Handled = true;
+    }
+
+    private void BarGrip_PointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (!_barResizing) return;
+
+        // pulling down makes the bar taller; past its contents it just gains room, short of them the lower lines are cut off
+        double proposed = _barStartHeight + (RootY(e) - _barStartY);
+        BarHost.Height = Math.Clamp(proposed, MinBarHeight, Math.Max(MinBarHeight, MaxBarHeight()));
+        e.Handled = true;
+    }
+
+    private void BarGrip_PointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_barResizing) return;
+        _barResizing = false;
+        e.Pointer.Capture(null);
+        e.Handled = true;
+    }
+
+    /// <summary>back to fitting the bar to its contents at the current width</summary>
+    private void BarGrip_DoubleTapped(object? sender, TappedEventArgs e)
+    {
+        BarHost.Height = double.NaN;
+        e.Handled = true;
+    }
+
+    /// <summary>tallest the bar may be: the panel less the grips and the room kept for the track</summary>
+    private double MaxBarHeight() =>
+        Bounds.Height - (ResizeGrip.IsVisible ? ResizeGrip.Bounds.Height : 0) - BarGrip.Bounds.Height - MinTrackHeight;
+
+    protected override void OnSizeChanged(SizeChangedEventArgs e)
+    {
+        base.OnSizeChanged(e);
+        // a bar fitted to its contents wraps onto more lines as the panel narrows; capping it keeps the track visible however far it wraps, and the grip still pulls it taller once the panel has the room
+        BarHost.MaxHeight = Math.Max(MinBarHeight, MaxBarHeight());
     }
 
     /// <summary>pointer Y in window space; measuring against the panel itself would feed the resize back into its own coordinate system since the panel's top edge moves as it grows</summary>
@@ -736,6 +798,31 @@ public partial class TimelinePanelControl : UserControl
     private void Play_Click(object? sender, RoutedEventArgs e) => TogglePlay();
     private void Stop_Click(object? sender, RoutedEventArgs e) => Stop();
     private void Close_Click(object? sender, RoutedEventArgs e) => CloseRequested?.Invoke();
+
+    /// <summary>asks the host to move the panel into its own window, or back into the main window when it already is</summary>
+    public event Action? DetachRequested;
+
+    private void Detach_Click(object? sender, RoutedEventArgs e) => DetachRequested?.Invoke();
+
+    private bool _isDetached;
+
+    /// <summary>set by the host when the panel is moved in or out of its own window: a detached panel is sized by its window, so the resize grip goes, and the button turns into "dock back"</summary>
+    public bool IsDetached
+    {
+        get => _isDetached;
+        set
+        {
+            _isDetached = value;
+            ResizeGrip.IsVisible = !value;
+            ToolTip.SetTip(DetachButton, value
+                ? "Dock the timeline back into the main window"
+                : "Detach the timeline into its own window");
+            // the glyph points out of the box when detaching and back into it when docking
+            DetachGlyph.Data = Geometry.Parse(value
+                ? "M 21,3 L 11,13 M 11,6 L 11,13 L 18,13 M 17,16 L 17,21 L 3,21 L 3,7 L 8,7"
+                : "M 10,3 L 21,3 L 21,14 M 21,3 L 11,13 M 17,13 L 17,21 L 3,21 L 3,7 L 11,7");
+        }
+    }
 
     private void ZoomSlider_ValueChanged(object? sender, Avalonia.Controls.Primitives.RangeBaseValueChangedEventArgs e)
     {

@@ -56,6 +56,9 @@ public partial class MainWindow : Window
     // update check window
     private UpdateWindow? _updateWindow;
 
+    /// <summary>the name the app goes by in its window titles and messages; the bundle's own name lives in the macOS Info.plist</summary>
+    public const string AppName = "Optimal GT Designer";
+
     public MainWindow()
     {
         InitializeComponent();
@@ -113,6 +116,7 @@ public partial class MainWindow : Window
         TimelinePanel.PreviewTimeChanged    += OnTimelinePreviewChanged;
         TimelinePanel.PreviewEnabledChanged += OnTimelinePreviewEnabledChanged;
         TimelinePanel.CloseRequested     += () => SetTimelineVisible(false);
+        TimelinePanel.DetachRequested    += ToggleTimelineDetached;
 
         // Delete acts on whichever surface was last clicked, so the key means "delete what I am working on" rather than always the canvas; tunnelled since the timeline's own handlers mark pointer presses handled and a bubbling handler would never see them
         TimelinePanel.AddHandler(PointerPressedEvent, (_, _) => _timelineIsActiveSurface = true,
@@ -188,6 +192,8 @@ public partial class MainWindow : Window
     protected override void OnOpened(EventArgs e)
     {
         base.OnOpened(e);
+        // tooltips are written with Windows keys; on macOS they read as ⌘ / ⌥ / Option to match what the handlers listen for
+        PlatformKeys.LocalizeToolTips(this);
         RestoreWindowGeometry();
         FitToWindow();
 
@@ -224,6 +230,8 @@ public partial class MainWindow : Window
         base.OnClosing(e);
         SaveWindowGeometry();
         if (_forceClose || !IsDirty) _webPreviews.Dispose();
+        // the detached timeline is its own top-level window, so it has to be told the app is going away
+        if (_forceClose || !IsDirty) _timelineWindow?.Close();
 
         if (_forceClose || !IsDirty) return;
         e.Cancel = true;
@@ -385,6 +393,7 @@ public partial class MainWindow : Window
         SnapGuidesMenuItem.IsChecked    = _prefs.SnapToGuides;
         SnapElementsMenuItem.IsChecked  = _prefs.SnapToElements;
         SnapCanvasMenuItem.IsChecked    = _prefs.SnapToCanvas;
+        SyncBackgroundButtons();
 
         SetRulersVisible(_prefs.ShowRulers);
     }
@@ -489,7 +498,7 @@ public partial class MainWindow : Window
                 : "guides") + "." + GuidesPart.FileExtension,
             FileTypeChoices = new[]
             {
-                new FilePickerFileType("GT+ Guides") { Patterns = new[] { "*." + GuidesPart.FileExtension } }
+                new FilePickerFileType($"{AppName} Guides") { Patterns = new[] { "*." + GuidesPart.FileExtension } }
             },
             DefaultExtension = GuidesPart.FileExtension
         });
@@ -520,7 +529,7 @@ public partial class MainWindow : Window
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("GT+ Guides") { Patterns = new[] { "*." + GuidesPart.FileExtension } },
+                new FilePickerFileType($"{AppName} Guides") { Patterns = new[] { "*." + GuidesPart.FileExtension } },
                 new FilePickerFileType("All Files")   { Patterns = new[] { "*.*" } }
             }
         });
@@ -644,17 +653,41 @@ public partial class MainWindow : Window
     }
 
     private void ToggleRulers_Click(object? sender, RoutedEventArgs e) =>
-        SetRulersVisible(RulersMenuItem.IsChecked);
+        SetRulersVisible((RulersMenuItem.IsChecked == true));
 
     private void ToggleShowGuides_Click(object? sender, RoutedEventArgs e)
     {
-        GtCanvas.ShowGuides = ShowGuidesMenuItem.IsChecked;
-        _prefs.ShowGuides   = ShowGuidesMenuItem.IsChecked;
+        GtCanvas.ShowGuides = (ShowGuidesMenuItem.IsChecked == true);
+        _prefs.ShowGuides   = (ShowGuidesMenuItem.IsChecked == true);
         _prefs.Save();
     }
 
+    private void BackgroundGrid_Click(object? sender, RoutedEventArgs e) =>
+        SetCanvasBackground(CanvasBackgroundMode.Grid);
+
+    private void BackgroundBlack_Click(object? sender, RoutedEventArgs e) =>
+        SetCanvasBackground(CanvasBackgroundMode.Solid);
+
+    /// <summary>the View tab's quick switch between the transparency grid and keying over black; black is the solid colour, so a custom one from Preferences is set back to black</summary>
+    private void SetCanvasBackground(CanvasBackgroundMode mode)
+    {
+        _prefs.CanvasBackground = mode;
+        if (mode == CanvasBackgroundMode.Solid) _prefs.CanvasSolidColor = Avalonia.Media.Colors.Black;
+        _prefs.Save();
+        GtCanvas.BackgroundBrush = CanvasBackgroundBrush.Build(_prefs);
+        SyncBackgroundButtons();
+    }
+
+    /// <summary>the two buttons act as a pair, so a click on the lit one leaves it lit rather than turning both off</summary>
+    private void SyncBackgroundButtons()
+    {
+        var grid = _prefs.CanvasBackground == CanvasBackgroundMode.Grid;
+        BackgroundGridButton.IsChecked  = grid;
+        BackgroundBlackButton.IsChecked = !grid;
+    }
+
     private void ToggleSnap_Click(object? sender, RoutedEventArgs e) =>
-        SetSnapEnabled(SnapMenuItem.IsChecked);
+        SetSnapEnabled((SnapMenuItem.IsChecked == true));
 
     private void SnapToggleButton_Click(object? sender, RoutedEventArgs e) =>
         SetSnapEnabled(SnapToggleButton.IsChecked == true);
@@ -671,12 +704,12 @@ public partial class MainWindow : Window
 
     private void SnapTarget_Click(object? sender, RoutedEventArgs e)
     {
-        GtCanvas.SnapToGuides   = SnapGuidesMenuItem.IsChecked;
-        GtCanvas.SnapToElements = SnapElementsMenuItem.IsChecked;
-        GtCanvas.SnapToCanvas   = SnapCanvasMenuItem.IsChecked;
-        _prefs.SnapToGuides     = SnapGuidesMenuItem.IsChecked;
-        _prefs.SnapToElements   = SnapElementsMenuItem.IsChecked;
-        _prefs.SnapToCanvas     = SnapCanvasMenuItem.IsChecked;
+        GtCanvas.SnapToGuides   = (SnapGuidesMenuItem.IsChecked == true);
+        GtCanvas.SnapToElements = (SnapElementsMenuItem.IsChecked == true);
+        GtCanvas.SnapToCanvas   = (SnapCanvasMenuItem.IsChecked == true);
+        _prefs.SnapToGuides     = (SnapGuidesMenuItem.IsChecked == true);
+        _prefs.SnapToElements   = (SnapElementsMenuItem.IsChecked == true);
+        _prefs.SnapToCanvas     = (SnapCanvasMenuItem.IsChecked == true);
         _prefs.Save();
     }
 
@@ -686,7 +719,7 @@ public partial class MainWindow : Window
         if (doc is null) return;
 
         var before = doc.GuidesLocked;
-        var after  = LockGuidesMenuItem.IsChecked;
+        var after  = (LockGuidesMenuItem.IsChecked == true);
         if (before == after) return;
 
         doc.GuidesLocked = after;
@@ -803,26 +836,26 @@ public partial class MainWindow : Window
                 _ = InsertImageSequenceAsync(fromFolder: false);
                 e.Handled = true;
                 break;
-            case Key.I when e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift) && e.Source is not TextBox:
+            case Key.I when e.KeyModifiers == (PlatformKeys.Command | KeyModifiers.Shift) && e.Source is not TextBox:
                 _ = InsertImageSequenceAsync(fromFolder: true);
                 e.Handled = true;
                 break;
             case Key.F2 when e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox:
                 if (LayersPanel.BeginRenameFocused()) e.Handled = true;
                 break;
-            case Key.Z when e.KeyModifiers == KeyModifiers.Control:
+            case Key.Z when e.KeyModifiers == PlatformKeys.Command:
                 DoUndo();
                 e.Handled = true;
                 break;
-            case Key.C when e.KeyModifiers == KeyModifiers.Control && e.Source is not TextBox:
+            case Key.C when e.KeyModifiers == PlatformKeys.Command && e.Source is not TextBox:
                 DoCopy();
                 e.Handled = true;
                 break;
-            case Key.V when e.KeyModifiers == KeyModifiers.Control && e.Source is not TextBox:
+            case Key.V when e.KeyModifiers == PlatformKeys.Command && e.Source is not TextBox:
                 _ = DoPasteAsync();
                 e.Handled = true;
                 break;
-            case Key.D when e.KeyModifiers == KeyModifiers.Control && e.Source is not TextBox:
+            case Key.D when e.KeyModifiers == PlatformKeys.Command && e.Source is not TextBox:
                 DoDuplicateElements();
                 e.Handled = true;
                 break;
@@ -832,45 +865,47 @@ public partial class MainWindow : Window
                     DoDeleteElements();
                 e.Handled = true;
                 break;
-            case Key.Y when e.KeyModifiers == KeyModifiers.Control:
+            // macOS redo is Shift+Cmd+Z; Cmd+Y keeps working for anyone used to the Windows key
+            case Key.Z when e.KeyModifiers == (PlatformKeys.Command | KeyModifiers.Shift):
+            case Key.Y when e.KeyModifiers == PlatformKeys.Command:
                 DoRedo();
                 e.Handled = true;
                 break;
-            case Key.S when e.KeyModifiers == KeyModifiers.Control:
+            case Key.S when e.KeyModifiers == PlatformKeys.Command:
                 DoSave();
                 e.Handled = true;
                 break;
-            case Key.S when e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift):
+            case Key.S when e.KeyModifiers == (PlatformKeys.Command | KeyModifiers.Shift):
                 _ = DoSaveAs();
                 e.Handled = true;
                 break;
-            case Key.N when e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift):
+            case Key.N when e.KeyModifiers == (PlatformKeys.Command | KeyModifiers.Shift):
                 DoNewLayer();
                 e.Handled = true;
                 break;
-            case Key.D when e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift):
+            case Key.D when e.KeyModifiers == (PlatformKeys.Command | KeyModifiers.Shift):
                 DoDuplicateLayer();
                 e.Handled = true;
                 break;
-            case Key.T when e.KeyModifiers == KeyModifiers.Control:
+            case Key.T when e.KeyModifiers == PlatformKeys.Command:
                 SetTimelineVisible(!TimelinePanel.IsVisible);
                 e.Handled = true;
                 break;
-            case Key.R when e.KeyModifiers == KeyModifiers.Control:
+            case Key.R when e.KeyModifiers == PlatformKeys.Command:
                 SetRulersVisible(!TopRuler.IsVisible);
                 e.Handled = true;
                 break;
-            case Key.OemSemicolon when e.KeyModifiers == KeyModifiers.Control:
-                ShowGuidesMenuItem.IsChecked = !ShowGuidesMenuItem.IsChecked;
+            case Key.OemSemicolon when e.KeyModifiers == PlatformKeys.Command:
+                ShowGuidesMenuItem.IsChecked = !(ShowGuidesMenuItem.IsChecked == true);
                 ToggleShowGuides_Click(this, new RoutedEventArgs());
                 e.Handled = true;
                 break;
-            case Key.OemSemicolon when e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift):
+            case Key.OemSemicolon when e.KeyModifiers == (PlatformKeys.Command | KeyModifiers.Shift):
                 SetSnapEnabled(!GtCanvas.SnapEnabled);
                 e.Handled = true;
                 break;
-            case Key.OemSemicolon when e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Alt):
-                LockGuidesMenuItem.IsChecked = !LockGuidesMenuItem.IsChecked;
+            case Key.OemSemicolon when e.KeyModifiers == (PlatformKeys.Command | KeyModifiers.Alt):
+                LockGuidesMenuItem.IsChecked = !(LockGuidesMenuItem.IsChecked == true);
                 ToggleLockGuides_Click(this, new RoutedEventArgs());
                 e.Handled = true;
                 break;
@@ -1069,7 +1104,7 @@ public partial class MainWindow : Window
 
     private void OnScrollViewerWheel(object? sender, PointerWheelEventArgs e)
     {
-        if (!e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
+        if (!e.KeyModifiers.HasFlag(PlatformKeys.Command)) return;
         e.Handled = true;
 
         var factor = e.Delta.Y > 0 ? 1.1 : 1.0 / 1.1;
@@ -1139,7 +1174,7 @@ public partial class MainWindow : Window
             DebugPanel.IsVisible = isOn;
             UpdateDebugPanel();
         }, () => ShowUpdateWindow());
-        _prefsWindow.Closed += (_, _) => _prefsWindow = null;
+        _prefsWindow.Closed += (_, _) => { _prefsWindow = null; SyncBackgroundButtons(); };
         _prefsWindow.Show(this);
     }
 
@@ -1347,10 +1382,15 @@ public partial class MainWindow : Window
         var open = new MenuItem
         {
             Header = "_Open...",
-            InputGesture = new KeyGesture(Key.O, KeyModifiers.Control)
+            InputGesture = new KeyGesture(Key.O, PlatformKeys.Command)
         };
         open.Click += OpenFile_Click;
         FileMenu.Items.Add(open);
+
+        // a Photoshop document comes in as a new title, the way GT Title Designer's own PSD import works
+        var importPsd = new MenuItem { Header = "_Import PSD..." };
+        importPsd.Click += async (_, _) => await ImportPsdAsync(null);
+        FileMenu.Items.Add(importPsd);
 
         var hasDoc = GtCanvas.Document is not null;
 
@@ -1358,7 +1398,7 @@ public partial class MainWindow : Window
         {
             Header = "_Save",
             IsEnabled = _currentPath is not null,
-            InputGesture = new KeyGesture(Key.S, KeyModifiers.Control)
+            InputGesture = new KeyGesture(Key.S, PlatformKeys.Command)
         };
         save.Click += Save_Click;
         FileMenu.Items.Add(save);
@@ -1367,7 +1407,7 @@ public partial class MainWindow : Window
         {
             Header = "Save _As...",
             IsEnabled = hasDoc,
-            InputGesture = new KeyGesture(Key.S, KeyModifiers.Control | KeyModifiers.Shift)
+            InputGesture = new KeyGesture(Key.S, PlatformKeys.Command | KeyModifiers.Shift)
         };
         saveAs.Click += SaveAs_Click;
         FileMenu.Items.Add(saveAs);
@@ -1454,6 +1494,83 @@ public partial class MainWindow : Window
         await OpenPath(path);
     }
 
+    // ── PSD import ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// turns a Photoshop document into a new, unsaved title (see <see cref="GtPlus.Services.Psd.PsdImporter"/> for the mapping).
+    /// The file is decoded off the UI thread; turning it into objects needs the font list, so that part runs here
+    /// </summary>
+    private async System.Threading.Tasks.Task ImportPsdAsync(string? path)
+    {
+        if (!await ConfirmDiscardChanges()) return;
+
+        if (path is null)
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Import Photoshop Document",
+                AllowMultiple = false,
+                FileTypeFilter = new[]
+                {
+                    new FilePickerFileType("Photoshop documents") { Patterns = new[] { "*.psd", "*.psb" } },
+                },
+            });
+            if (files.Count == 0) return;
+            path = files[0].TryGetLocalPath();
+            if (path is null) return;
+        }
+
+        var filename = Path.GetFileName(path);
+        StatusText.Text = $"Importing {filename}...";
+
+        GtPlus.Services.Psd.PsdImportResult result;
+        try
+        {
+            var psd = await System.Threading.Tasks.Task.Run(() => GtPlus.Services.Psd.PsdReader.Read(path));
+            result = GtPlus.Services.Psd.PsdImporter.Import(psd, Path.GetFileNameWithoutExtension(path));
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"PSD import failed: {path}", ex);
+            StatusText.Text = $"Could not import {filename}: {ex.Message}";
+            return;
+        }
+
+        var document = result.Document;
+        _currentAssets = result.Assets;
+        _currentPath   = null;   // Save asks where to put it: the PSD is the source, not the title
+
+        GtCanvas.SetAssets(_currentAssets);
+        GtCanvas.Document = document;
+        LayersPanel.Populate(document);
+        DeleteLayerMenuItem.IsEnabled = document.Layers.Count > 1;
+        PropertiesPanel.Populate(Array.Empty<GtElement>());
+        TimelinePanel.Populate(document);
+        _history.Clear();
+        _savedCursor = int.MinValue;   // never saved, so closing or opening something else asks first
+        FitToWindow();
+        UpdateRulers();
+        UpdateRulerSelection();
+
+        var parts = new List<string>
+        {
+            $"Imported {filename}",
+            $"{document.Layers.Count} layer{(document.Layers.Count == 1 ? "" : "s")}",
+            $"{result.Images} image{(result.Images == 1 ? "" : "s")}",
+            $"{result.Texts} text",
+        };
+        if (result.Clipped > 0) parts.Add($"{result.Clipped} clipping mask{(result.Clipped == 1 ? "" : "s")}");
+        if (result.SkippedHidden > 0) parts.Add($"{result.SkippedHidden} hidden skipped");
+        if (result.MissingFonts.Count > 0) parts.Add($"missing fonts: {string.Join(", ", result.MissingFonts)}");
+        if (!result.StandardSize) parts.Add($"{document.Width}×{document.Height} is not a size vMix GT accepts");
+        StatusText.Text = string.Join("  ·  ", parts);
+        Title = $"{AppName}  -  {filename} (imported)";
+
+        foreach (var warning in result.Warnings) Logger.Warn($"PSD import: {warning}");
+        Logger.Info($"PSD imported: {filename}, {result.Images} images, {result.Texts} text, {document.Layers.Count} layers");
+        Avalonia.Threading.Dispatcher.UIThread.Post(RebuildFileMenu, Avalonia.Threading.DispatcherPriority.Background);
+    }
+
     private async System.Threading.Tasks.Task OpenPath(string path)
     {
         if (!await ConfirmDiscardChanges()) return;
@@ -1482,7 +1599,7 @@ public partial class MainWindow : Window
             var storyboards = document.Storyboards.Count > 0
                 ? $"  ·  {document.Storyboards.Count} storyboard(s)" : "";
             StatusText.Text = $"{filename}  ·  {document.Layers.Count} layers  ·  {document.Width}×{document.Height}{storyboards}";
-            Title = $"GT+ -  {filename}";
+            Title = $"{AppName}  -  {filename}";
 
             _recent.Add(path);
             Avalonia.Threading.Dispatcher.UIThread.Post(RebuildFileMenu, Avalonia.Threading.DispatcherPriority.Background);
@@ -1506,8 +1623,117 @@ public partial class MainWindow : Window
     private void OnTimelinePreviewEnabledChanged(bool enabled) =>
         PreviewToggleButton.IsChecked = enabled;
 
+    // ── detached timeline ────────────────────────────────────────────────
+
+    /// <summary>the timeline's own window while it is detached, null while it is docked</summary>
+    private Window? _timelineWindow;
+
+    /// <summary>where the panel sat in the main window, so docking puts it back exactly there</summary>
+    private Panel?  _timelineDockHost;
+    private int     _timelineDockIndex;
+    private double  _timelineDockHeight;
+
+    private void ToggleTimelineDetached()
+    {
+        if (_timelineWindow is null) DetachTimeline();
+        else                         _timelineWindow.Close();   // Closed docks it back
+    }
+
+    /// <summary>moves the timeline panel out of the main window into a free-standing window of its own, which can live on another monitor. The panel itself moves, not a copy, so its storyboard, selection and playback carry straight across</summary>
+    private void DetachTimeline()
+    {
+        if (_timelineWindow is not null || TimelinePanel.Parent is not Panel host) return;
+
+        bool wasVisible = TimelinePanel.IsVisible;
+        _timelineDockHost   = host;
+        _timelineDockIndex  = host.Children.IndexOf(TimelinePanel);
+        _timelineDockHeight = TimelinePanel.Height;
+        host.Children.Remove(TimelinePanel);
+
+        TimelinePanel.Height     = double.NaN;   // the window sizes it now
+        TimelinePanel.IsDetached = true;
+        TimelinePanel.IsVisible  = true;
+        TimelineToggleButton.IsChecked = true;
+
+        // not owned by the main window: on macOS an owned window is tied to its owner and travels with it, which is the opposite of parking it on a second screen
+        var win = new Window
+        {
+            Title     = $"Timeline - {AppName}",
+            Width     = _prefs.TimelineWindowWidth,
+            Height    = _prefs.TimelineWindowHeight,
+            MinWidth  = 640,
+            MinHeight = 200,
+            Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.FromRgb(0x14, 0x14, 0x14)),
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            Content   = TimelinePanel,
+        };
+
+        // reopen where it was last left, as long as that spot is still on a connected screen
+        var saved = new PixelPoint(_prefs.TimelineWindowX, _prefs.TimelineWindowY);
+        if (_prefs.TimelineWindowX >= 0 && _prefs.TimelineWindowY >= 0 &&
+            Screens.All.Any(sc => sc.WorkingArea.Contains(saved)))
+        {
+            win.WindowStartupLocation = WindowStartupLocation.Manual;
+            win.Position = saved;
+        }
+
+        // shortcuts (Space to play, undo, save, tools...) keep working with the timeline window in front
+        win.KeyDown += (_, e) => { if (!e.Handled) OnKeyDown(e); };
+        win.KeyUp   += (_, e) => { if (!e.Handled) OnKeyUp(e); };
+
+        win.Closing += (_, _) =>
+        {
+            if (win.WindowState == WindowState.Normal)
+            {
+                _prefs.TimelineWindowX      = win.Position.X;
+                _prefs.TimelineWindowY      = win.Position.Y;
+                _prefs.TimelineWindowWidth  = win.Bounds.Width;
+                _prefs.TimelineWindowHeight = win.Bounds.Height;
+                _prefs.Save();
+            }
+        };
+        win.Closed += (_, _) =>
+        {
+            if (!ReferenceEquals(_timelineWindow, win)) return;
+            _timelineWindow = null;
+            win.Content = null;   // a control has one parent; the window has to let go before the main window can take it back
+            DockTimeline();
+        };
+
+        _timelineWindow = win;
+        win.Show();
+
+        if (!wasVisible) TimelinePanel.Populate(GtCanvas.Document);
+
+        // the canvas just got the panel's height back
+        if (_prefs.AutoFitOnTimelineOpen)
+            Dispatcher.UIThread.Post(FitIfCanvasOverflows, DispatcherPriority.Loaded);
+    }
+
+    /// <summary>puts the panel back where it was taken from, at its old height; it stays open</summary>
+    private void DockTimeline()
+    {
+        var host = _timelineDockHost;
+        if (host is null || TimelinePanel.Parent is not null) return;
+
+        host.Children.Insert(Math.Clamp(_timelineDockIndex, 0, host.Children.Count), TimelinePanel);
+        TimelinePanel.Height     = double.IsNaN(_timelineDockHeight) ? 196 : _timelineDockHeight;
+        TimelinePanel.IsDetached = false;
+        _timelineDockHost = null;
+
+        if (TimelinePanel.IsVisible && _prefs.AutoFitOnTimelineOpen)
+            Dispatcher.UIThread.Post(FitIfCanvasOverflows, DispatcherPriority.Loaded);
+    }
+
     private void SetTimelineVisible(bool visible)
     {
+        // a detached timeline is brought forward rather than re-shown, and hiding it docks it back first so the toggle always leaves it where it started
+        if (_timelineWindow is { } detached)
+        {
+            if (visible) { detached.Activate(); TimelineToggleButton.IsChecked = true; return; }
+            detached.Close();
+        }
+
         TimelinePanel.IsVisible = visible;
         TimelineToggleButton.IsChecked = visible;
 
@@ -1602,6 +1828,10 @@ public partial class MainWindow : Window
 
     private void Exit_Click(object? sender, RoutedEventArgs e) => Close();
 
+    // ribbon Animations > Export, the same commands as File > Export
+    private async void ExportVideo_Click(object? sender, RoutedEventArgs e) => await DoExportVideo();
+    private async void ExportPng_Click(object? sender, RoutedEventArgs e)   => await DoExportPng();
+
     private void Save_Click(object? sender, RoutedEventArgs e) => DoSave();
     private async void SaveAs_Click(object? sender, RoutedEventArgs e) => await DoSaveAs();
 
@@ -1634,7 +1864,7 @@ public partial class MainWindow : Window
         if (SaveToPath(path))
         {
             _currentPath = path;
-            Title = $"GT+  -  {Path.GetFileName(path)}";
+            Title = $"{AppName}  -  {Path.GetFileName(path)}";
             _recent.Add(path);
             RebuildFileMenu();
         }
@@ -1653,7 +1883,7 @@ public partial class MainWindow : Window
             int webCount = doc.Layers.Sum(l => l.Elements.Count(el => el is GtWebElement));
             StatusText.Text = webCount == 0
                 ? $"Saved  ·  {Path.GetFileName(path)}"
-                : $"Saved  ·  {Path.GetFileName(path)}  ·  {webCount} web page{(webCount == 1 ? "" : "s")} stored for GT+ only";
+                : $"Saved  ·  {Path.GetFileName(path)}  ·  {webCount} web page{(webCount == 1 ? "" : "s")} stored for {AppName} only";
             return true;
         }
         catch (Exception ex)
@@ -1771,7 +2001,7 @@ public partial class MainWindow : Window
         UpdateRulerSelection();
 
         StatusText.Text = $"New document  ·  {width}×{height}";
-        Title = "GT+  -  (new)";
+        Title = $"{AppName}  -  (new)";
         Avalonia.Threading.Dispatcher.UIThread.Post(RebuildFileMenu, Avalonia.Threading.DispatcherPriority.Background);
     }
 
@@ -2451,6 +2681,22 @@ public partial class MainWindow : Window
         return result;
     }
 
+    /// <summary>the first dropped .psd / .psb file, if any</summary>
+    private static string? DroppedPsdPath(DragEventArgs e)
+    {
+        var files = e.DataTransfer.TryGetFiles();
+        if (files is null) return null;
+        foreach (var file in files)
+        {
+            var path = file.TryGetLocalPath();
+            if (path is not null && IsPsdPath(path)) return path;
+        }
+        return null;
+    }
+
+    private static bool IsPsdPath(string path) =>
+        path.EndsWith(".psd", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".psb", StringComparison.OrdinalIgnoreCase);
+
     private static List<string> DroppedImagePaths(DragEventArgs e) =>
         ImageFilePaths(e.DataTransfer.TryGetFiles());
 
@@ -2459,7 +2705,8 @@ public partial class MainWindow : Window
 
     private void OnCanvasDragOver(object? sender, DragEventArgs e)
     {
-        e.DragEffects = GtCanvas.Document is not null &&
+        e.DragEffects = DroppedPsdPath(e) is not null ||
+                        GtCanvas.Document is not null &&
                         (DroppedImagePaths(e).Count > 0 || DroppedFolderPaths(e).Count > 0)
             ? DragDropEffects.Copy
             : DragDropEffects.None;
@@ -2470,6 +2717,15 @@ public partial class MainWindow : Window
     private void OnCanvasDrop(object? sender, DragEventArgs e)
     {
         e.Handled = true;
+
+        // a dropped Photoshop file opens as an imported title rather than being added to this one
+        if (DroppedPsdPath(e) is { } psd)
+        {
+            e.DragEffects = DragDropEffects.Copy;
+            _ = ImportPsdAsync(psd);
+            return;
+        }
+
         if (GtCanvas.Document is null) return;
 
         var paths   = DroppedImagePaths(e);

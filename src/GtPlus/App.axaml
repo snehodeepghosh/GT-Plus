@@ -1,8 +1,18 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="GtPlus.App"
+             Name="Optimal GT Designer"
              RequestedThemeVariant="Dark">
+    <!-- Name is what macOS shows as the app menu in the menu bar (and in its About / Hide / Quit items); unset it reads "Avalonia Application" -->
     <Application.Styles>
-        <FluentTheme />
+        <FluentTheme>
+            <FluentTheme.Palettes>
+                <!-- vMix GT's blue as the system accent, so selection, focus and sliders match the ribbon -->
+                <ColorPaletteResources x:Key="Dark" Accent="#1e5b9b"
+                                       RegionColor="#141414"
+                                       AltHigh="#0d0d0d"/>
+            </FluentTheme.Palettes>
+        </FluentTheme>
+        <StyleInclude Source="avares://GtPlus/Styles/Ribbon.axaml"/>
     </Application.Styles>
 </Application>

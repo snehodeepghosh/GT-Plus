@@ -1,0 +1,299 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        GT-style ribbon, drawn in the app's graphite palette.
+
+        Ramp (neutral, used for every surface, border and text):
+          #0d0d0d  window / canvas surround
+          #141414  tab strip, status bar, side strips
+          #1b1b1b  ribbon body, panels
+          #242424  hover surface
+          #2b2b2b  pressed surface
+          #2e2e2e  hairline
+          #e6e6e6  text primary   #a6a6a6  text secondary   #7a7a7a  text muted
+        Accent: #1e5b9b, vMix GT's own blue. Used for the File tab, checked toggles and selection only.
+    -->
+
+    <Styles.Resources>
+        <SolidColorBrush x:Key="GtSurface0" Color="#0d0d0d"/>
+        <SolidColorBrush x:Key="GtSurface1" Color="#141414"/>
+        <SolidColorBrush x:Key="GtSurface2" Color="#1b1b1b"/>
+        <SolidColorBrush x:Key="GtHover"    Color="#242424"/>
+        <SolidColorBrush x:Key="GtPressed"  Color="#2b2b2b"/>
+        <SolidColorBrush x:Key="GtLine"     Color="#2e2e2e"/>
+        <SolidColorBrush x:Key="GtText"     Color="#e6e6e6"/>
+        <SolidColorBrush x:Key="GtText2"    Color="#a6a6a6"/>
+        <SolidColorBrush x:Key="GtText3"    Color="#7a7a7a"/>
+        <SolidColorBrush x:Key="GtAccent"   Color="#1e5b9b"/>
+        <SolidColorBrush x:Key="GtAccentHi" Color="#2669b0"/>
+        <SolidColorBrush x:Key="GtAccentBg" Color="#1d2d40"/>
+    </Styles.Resources>
+
+    <!-- ── ribbon tabs (also used by the Layers / History strip) ── -->
+    <Style Selector="ToggleButton.tab">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="0"/>
+        <Setter Property="Foreground" Value="{StaticResource GtText2}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Padding" Value="12,0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Height" Value="28"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Foreground" Duration="0:0:0.12"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="ToggleButton.tab /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="CornerRadius" Value="0"/>
+    </Style>
+    <Style Selector="ToggleButton.tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource GtText}"/>
+    </Style>
+    <Style Selector="ToggleButton.tab:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <!-- the selected tab is the ribbon body colour, so it reads as joined to the groups below it -->
+    <Style Selector="ToggleButton.tab:checked /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource GtSurface2}"/>
+        <Setter Property="Foreground" Value="{StaticResource GtText}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource GtLine}"/>
+        <Setter Property="BorderThickness" Value="1,1,1,0"/>
+    </Style>
+    <Style Selector="ToggleButton.tab:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource GtSurface2}"/>
+    </Style>
+
+    <!-- ── File tab: GT's filled blue tab, here a top-level menu item ── -->
+    <Style Selector="Menu.file">
+        <Setter Property="Height" Value="28"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Menu.file > MenuItem">
+        <Setter Property="Background" Value="{StaticResource GtAccent}"/>
+        <Setter Property="Foreground" Value="#ffffff"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Height" Value="28"/>
+        <Setter Property="Padding" Value="16,0"/>
+        <Setter Property="CornerRadius" Value="0"/>
+    </Style>
+    <Style Selector="Menu.file > MenuItem /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{StaticResource GtAccent}"/>
+        <Setter Property="CornerRadius" Value="0"/>
+    </Style>
+    <Style Selector="Menu.file > MenuItem:pointerover /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{StaticResource GtAccentHi}"/>
+    </Style>
+    <Style Selector="Menu.file > MenuItem:open /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{StaticResource GtAccentHi}"/>
+    </Style>
+    <Style Selector="Menu.file > MenuItem /template/ ContentPresenter#PART_HeaderPresenter">
+        <Setter Property="Foreground" Value="#ffffff"/>
+    </Style>
+
+    <!-- ── ribbon group: content on top, caption underneath, hairline on the right ── -->
+    <Style Selector="DockPanel.group">
+        <Setter Property="Margin" Value="0"/>
+    </Style>
+    <Style Selector="Border.group">
+        <Setter Property="BorderBrush" Value="{StaticResource GtLine}"/>
+        <Setter Property="BorderThickness" Value="0,0,1,0"/>
+        <Setter Property="Padding" Value="8,4,8,0"/>
+        <Setter Property="Margin" Value="0,4"/>
+    </Style>
+    <Style Selector="TextBlock.caption">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Foreground" Value="{StaticResource GtText3}"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="Margin" Value="0,4,0,0"/>
+        <Setter Property="DockPanel.Dock" Value="Bottom"/>
+    </Style>
+    <Style Selector="TextBlock.lbl">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Foreground" Value="{StaticResource GtText2}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Margin" Value="0,0,4,0"/>
+        <!-- transparent, not null: several labels are drag-to-scrub targets and must hit-test across their box -->
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <!-- a group the selection cannot use dims as a whole, GT greys its groups the same way -->
+    <Style Selector="Border.group:disabled">
+        <Setter Property="Opacity" Value="0.6"/>
+    </Style>
+
+    <!-- ── ribbon buttons: large (icon over label) and small (icon only, 24x22) ── -->
+    <Style Selector=":is(Button).rb">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="Foreground" Value="{StaticResource GtText}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.1"/>
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector=":is(Button).rb /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+    <Style Selector=":is(Button).rb:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource GtHover}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource GtLine}"/>
+        <Setter Property="Foreground" Value="{StaticResource GtText}"/>
+    </Style>
+    <Style Selector=":is(Button).rb:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource GtPressed}"/>
+    </Style>
+    <Style Selector=":is(Button).rb:pressed">
+        <Setter Property="RenderTransform" Value="scale(0.97)"/>
+    </Style>
+    <Style Selector="ToggleButton.rb:checked /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource GtAccentBg}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource GtAccent}"/>
+        <Setter Property="Foreground" Value="{StaticResource GtText}"/>
+    </Style>
+    <Style Selector="ToggleButton.rb:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="#22364d"/>
+        <Setter Property="BorderBrush" Value="{StaticResource GtAccentHi}"/>
+    </Style>
+    <Style Selector=":is(Button).rb:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource GtText3}"/>
+    </Style>
+    <Style Selector=":is(Button).rb:disabled">
+        <Setter Property="Opacity" Value="0.45"/>
+    </Style>
+
+    <Style Selector=":is(Button).lg">
+        <Setter Property="MinWidth" Value="48"/>
+        <Setter Property="Height" Value="70"/>
+        <Setter Property="Padding" Value="6,4"/>
+        <Setter Property="VerticalAlignment" Value="Top"/>
+    </Style>
+    <Style Selector=":is(Button).sm">
+        <Setter Property="Width" Value="24"/>
+        <Setter Property="Height" Value="22"/>
+        <Setter Property="Padding" Value="0"/>
+    </Style>
+    <!-- small button with a label after the icon, GT's stacked "icon + text" rows -->
+    <Style Selector=":is(Button).row">
+        <Setter Property="Height" Value="22"/>
+        <Setter Property="Padding" Value="4,0,8,0"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    </Style>
+
+    <!--
+        line icons, all drawn in one 24x24 box and never stretched, so every glyph keeps the
+        same optical size and a single straight line stays a line. Smaller sizes scale the box
+        and pull the layout slot in with a negative margin.
+    -->
+    <Style Selector="Path.ic">
+        <Setter Property="Stroke" Value="{StaticResource GtText}"/>
+        <Setter Property="StrokeThickness" Value="2"/>
+        <Setter Property="StrokeLineCap" Value="Round"/>
+        <Setter Property="StrokeJoin" Value="Round"/>
+        <Setter Property="Stretch" Value="None"/>
+        <Setter Property="Width" Value="24"/>
+        <Setter Property="Height" Value="24"/>
+        <Setter Property="RenderTransform" Value="scale(0.6667)"/>
+        <Setter Property="Margin" Value="-4"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector="Path.ic.s14">
+        <Setter Property="RenderTransform" Value="scale(0.5833)"/>
+        <Setter Property="Margin" Value="-5"/>
+    </Style>
+    <Style Selector="Path.ic.s12">
+        <Setter Property="RenderTransform" Value="scale(0.5)"/>
+        <Setter Property="Margin" Value="-6"/>
+    </Style>
+    <Style Selector="Path.ic.s8">
+        <Setter Property="RenderTransform" Value="scale(0.3333)"/>
+        <Setter Property="Margin" Value="-8,-8,-8,-8"/>
+        <Setter Property="StrokeThickness" Value="3"/>
+    </Style>
+    <Style Selector="Path.ic.s24, :is(Button).lg Path.ic">
+        <Setter Property="RenderTransform" Value="none"/>
+        <Setter Property="StrokeThickness" Value="1.5"/>
+        <Setter Property="Margin" Value="0"/>
+    </Style>
+    <Style Selector=":is(Button).lg StackPanel > Path.ic">
+        <Setter Property="Margin" Value="0,4,0,6"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+    </Style>
+    <Style Selector=":is(Button).lg TextBlock">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="TextAlignment" Value="Center"/>
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="LineHeight" Value="13"/>
+    </Style>
+    <Style Selector=":is(Button).row TextBlock">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Margin" Value="6,0,0,0"/>
+    </Style>
+
+    <!-- ── status bar / side strip buttons ── -->
+    <Style Selector=":is(Button).flat">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="Foreground" Value="{StaticResource GtText2}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Height" Value="22"/>
+        <Setter Property="Padding" Value="8,0"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+    <Style Selector=":is(Button).flat /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector=":is(Button).flat:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource GtHover}"/>
+        <Setter Property="Foreground" Value="{StaticResource GtText}"/>
+    </Style>
+    <Style Selector="ToggleButton.flat:checked /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource GtAccentBg}"/>
+        <Setter Property="Foreground" Value="{StaticResource GtText}"/>
+    </Style>
+
+    <!-- left object toolbar -->
+    <Style Selector="ToggleButton.tool, Button.tool">
+        <Setter Property="Width" Value="32"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="MinWidth" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+    <Style Selector=":is(Button).tool /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector=":is(Button).tool:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource GtHover}"/>
+    </Style>
+    <Style Selector="ToggleButton.tool:checked /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource GtAccentBg}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource GtAccent}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
+</Styles>
