@@ -320,7 +320,7 @@
                                                 <TextBlock Text="I" FontStyle="Italic" FontWeight="SemiBold"/>
                                             </ToggleButton>
                                             <ToggleButton x:Name="FauxItalicButton" Classes="rb sm"
-                                                          ToolTip.Tip="Faux italic, as Photoshop does it: slants the text 10° about its baseline. Saved as GT's own Skew effect, so vMix shows the same slant"
+                                                          ToolTip.Tip="Faux italic, as Photoshop does it: slants the text forward 10° about its centre. Saved as GT's own Skew effect, so vMix shows the same slant"
                                                           Click="FauxItalicButton_Click">
                                                 <TextBlock Text="I" FontWeight="SemiBold" Foreground="#9ccdf5">
                                                     <TextBlock.RenderTransform>

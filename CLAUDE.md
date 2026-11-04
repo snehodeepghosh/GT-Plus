@@ -193,6 +193,9 @@ images, UI aids, view state) stays in memory or preferences and is never written
 - **Fonts:** `ReplaceFontsWindow` (Home › Fonts) groups text by (family, weight, style) and rewrites those three
   attributes, one undo step. The Font group's faux italic button sets Skew X = `FauxItalicAngle` (+10°, Photoshop's
   measured slant) with `CenterOffset` on the first baseline
+- **Rotation sign:** vMix turns a positive `RotateZ` counterclockwise on screen (its 3D world is y-up). Every canvas
+  rotation goes through `GtCanvasControl.ScreenRz` (= −RotateZ); never call `Matrix.CreateRotation(rotateZ)` directly.
+  RotateX/RotateY, Skew Y and Skew `CenterOffset` directions are not yet verified against vMix
 - **PSD text transforms:** `TextTransform.Decompose` QR-splits the 2×2 into rotation (→ `RotateZ`), X shear (→ Skew) and
   scale (→ font size); faux italic adds −tan10°·sx/sy to the shear. The box is placed so `L = O − size/2 − T(a − size/2)`
   with T = R·S about the centre. The canvas applies a Replace-stage reshape *before* Z rotation, as GT does

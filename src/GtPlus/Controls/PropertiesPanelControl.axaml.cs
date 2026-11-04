@@ -1058,11 +1058,12 @@ public partial class PropertiesPanelControl : UserControl
         bool on     = FauxItalicButton.IsChecked == true;
         var texts   = AllTexts;
         var befores = texts.Select(t => GtEffect.CloneList(t.Effects)).ToList();
+        // slanted about the box centre, GT's default pivot; a CenterOffset would pin the baseline but its direction in vMix is
+        // not verified, and a wrong sign would push the text sideways in the broadcast
         foreach (var t in texts)
         {
             GtSkew.Set(t, on ? FauxItalicAngle : 0, 0);
-            if (on && GtSkew.First(t.Effects) is { } skew && Controls.GtCanvasControl.FirstLineGeometry(t) is { } line)
-                skew.CenterOffset = new GtPoint(0, Math.Round(line.Baseline - t.Dimensions.Height / 2, 2));
+            if (GtSkew.First(t.Effects) is { } skew) skew.CenterOffset = GtPoint.Zero;
         }
         var afters = texts.Select(t => GtEffect.CloneList(t.Effects)).ToList();
         PushHistory(on ? "Faux italic" : "Remove faux italic",

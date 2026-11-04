@@ -2118,7 +2118,7 @@ public class GtCanvasControl : Control
         {
             var c = box.Center;
             matrix *= Matrix.CreateTranslation(-c.X, -c.Y)
-                    * Matrix.CreateRotation(anim.RotateZ)
+                    * Matrix.CreateRotation(ScreenRz(anim.RotateZ))
                     * Matrix.CreateTranslation(c.X, c.Y);
         }
 
@@ -2513,13 +2513,20 @@ public class GtCanvasControl : Control
             ? new Vector(tb.StrokeThickness / 2, tb.StrokeThickness / 2)
             : default;
 
+    /// <summary>
+    /// GT's RotateZ (radians) as an angle for this canvas. vMix turns a positive RotateZ <b>counterclockwise</b> on screen
+    /// (its 3D world is y-up; checked against vMix), while a rotation matrix in this y-down canvas turns clockwise, so the
+    /// sign flips here and only here. Every place the canvas turns something by RotateZ goes through this
+    /// </summary>
+    internal static double ScreenRz(double rotateZ) => -rotateZ;
+
     /// <summary>pushes an in-plane (Z-axis) rotation transform centred on the element bounds (affine, exact); returns null when RotateZ is zero</summary>
     private static IDisposable? PushZRotation(DrawingContext ctx, double rotateZ, Rect bounds)
     {
         if (rotateZ == 0) return null;
         var center = bounds.Center;
         var mat = Matrix.CreateTranslation(-center.X, -center.Y)
-                * Matrix.CreateRotation(rotateZ)
+                * Matrix.CreateRotation(ScreenRz(rotateZ))
                 * Matrix.CreateTranslation(center.X, center.Y);
         return ctx.PushTransform(mat);
     }
@@ -2548,7 +2555,7 @@ public class GtCanvasControl : Control
             if (rz != 0 && rx == 0 && ry == 0)
             {
                 var c   = bounds.Center;
-                var rot = Matrix.CreateTranslation(-c.X, -c.Y) * Matrix.CreateRotation(rz) * Matrix.CreateTranslation(c.X, c.Y);
+                var rot = Matrix.CreateTranslation(-c.X, -c.Y) * Matrix.CreateRotation(ScreenRz(rz)) * Matrix.CreateTranslation(c.X, c.Y);
                 if (rot.TryInvert(out var inv)) reshape = inv * reshape * rot;
             }
         }
@@ -2700,7 +2707,7 @@ public class GtCanvasControl : Control
         if (rotateZ == 0) return bounds;
         var center = bounds.Center;
         var mat = Matrix.CreateTranslation(-center.X, -center.Y)
-                * Matrix.CreateRotation(rotateZ)
+                * Matrix.CreateRotation(ScreenRz(rotateZ))
                 * Matrix.CreateTranslation(center.X, center.Y);
         return bounds.TransformToAABB(mat);
     }
@@ -2746,7 +2753,7 @@ public class GtCanvasControl : Control
 
         double cosRy = Math.Cos(ry), sinRy = Math.Sin(ry); // X-axis rotation (RotateY_model)
         double cosRx = Math.Cos(rx), sinRx = Math.Sin(rx); // Y-axis rotation (RotateX_model)
-        double cosRz = Math.Cos(rz), sinRz = Math.Sin(rz);
+        double cosRz = Math.Cos(ScreenRz(rz)), sinRz = Math.Sin(ScreenRz(rz));
 
         // 4 corners in element-local space (centred at origin): TL, TR, BR, BL
         double[] xs = new[] { -w / 2,  w / 2,  w / 2, -w / 2 };

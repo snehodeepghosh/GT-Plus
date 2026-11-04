@@ -436,7 +436,8 @@ public static class PsdImporter
         // too): together the transform T = R·S, with the scale already in the font size
         if (transformed)
         {
-            tb.RotateZ = Math.Round(xf.Rotation, 6);
+            // the split gives a clockwise-on-screen angle; vMix turns a positive RotateZ counterclockwise
+            tb.RotateZ = Math.Round(-xf.Rotation, 6);
             // GT's skew X is positive for a forward (italic) lean, which is a negative shear here
             if (Math.Abs(shear) > 1e-3) GtSkew.Set(tb, Math.Round(-Math.Atan(shear) * 180 / Math.PI, 3), 0);
         }

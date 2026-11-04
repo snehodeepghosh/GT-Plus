@@ -397,7 +397,7 @@ The pattern is `<ElementType.Transform>` containing `<Transform Rotate="rx,ry,rz
 | -------------- | -------- | ------- | ------------------------------------------------ |
 | `rx`         | X (horiz) | radians | Spin left/right — compresses width (`scaleX = cos(rx)`)  |
 | `ry`         | Y (vert)  | radians | Tilt forward/back — compresses height (`scaleY = cos(ry)`) |
-| `rz`         | Z (depth) | radians | Standard 2D in-plane rotation (clockwise +)              |
+| `rz`         | Z (depth) | radians | Standard 2D in-plane rotation (**counterclockwise +** on screen, checked against vMix) |
 
 **Notes:**
 - All three values are always written when any is non-zero: `Rotate="rx,ry,rz"`

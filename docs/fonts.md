@@ -35,9 +35,10 @@ face isn't installed does it fall back to reading the family and weight out of t
 ## Faux italic
 
 The slanted **I** button next to Italic in the Font group applies faux italic the way Photoshop does it: the text
-slants by 10°, pivoting on its first baseline so the line stays where it is.
+slants forward by 10°.
 
-- It is saved as GT's own Skew effect (`<Effect Type="Skew" Angle="10,0" />`), so vMix draws exactly the same slant.
+- It is saved as GT's own Skew effect (`<Effect Type="Skew" Angle="10,0" />`), slanting about the text's centre, so
+  vMix draws exactly the same slant.
   The renderer's synthetic italic looks different in this editor, in vMix and in Photoshop.
 - The 10° angle was measured from Photoshop's own render of faux-italic text.
 - Clicking it again removes the slant. You can fine-tune it on **Effects › Skew**.
