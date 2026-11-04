@@ -56,9 +56,20 @@ public sealed class GtAnimOverride
     /// <summary>normalised position (0-1) into an image sequence, when one is driven</summary>
     public double? SequencePosition { get; set; }
 
+    /// <summary>an ImageSequenceLoop driving the image: its Speed and the output frames it has run for. The position also depends on how many frames the sequence has, which only the renderer knows, so it is resolved there with <see cref="GtAnimationEvaluator.LoopPosition"/></summary>
+    public double? SequenceLoopSpeed { get; set; }
+    public long SequenceLoopFrame { get; set; }
+
+    /// <summary>how far a FillOffset / StrokeOffset has slid the fill or stroke texture, as a fraction of the object's own width and height</summary>
+    public double FillOffsetX { get; set; }
+    public double FillOffsetY { get; set; }
+    public double StrokeOffsetX { get; set; }
+    public double StrokeOffsetY { get; set; }
+
     /// <summary>true when this override would not change rendering at all</summary>
     public bool IsNeutral =>
-        !Hidden && !HasCrop && SequencePosition is null &&
+        !Hidden && !HasCrop && SequencePosition is null && SequenceLoopSpeed is null &&
+        FillOffsetX == 0 && FillOffsetY == 0 && StrokeOffsetX == 0 && StrokeOffsetY == 0 &&
         OpacityMul >= 1.0 && ScaleX == 1.0 && ScaleY == 1.0 &&
         OffsetX == 0 && OffsetY == 0 &&
         RotateX == 0 && RotateY == 0 && RotateZ == 0;
@@ -206,7 +217,8 @@ public static class GtAnimationEvaluator
             bool reversed = anim.Reverse != rewound;
 
             // "progress" runs 0->1 across the animation window, "rest" is the settled state (1 = at the To value); continuous animations have no window at all, they accumulate a Speed-scaled delta for as long as they have been running
-            double elapsed  = time - anim.Delay;
+            // vMix ignores Delay for the continuous types: they run from the moment the title loads
+            double elapsed  = anim.IsContinuousType ? time : time - anim.Delay;
             double duration = Math.Max(anim.EffectiveDuration, 1e-6);
             double raw      = anim.IsContinuousType ? 0.0 : Math.Clamp(elapsed / duration, 0.0, 1.0);
             double eased    = EasingFor(anim.Interpolation).Ease(raw);
@@ -381,21 +393,80 @@ public static class GtAnimationEvaluator
                 break;
 
             case GtAnimationType.ImageSequenceLoop:
+                // vMix adds Speed / frame-count to the sequence position every output frame (not Speed / fps like the others) and drops back to the first frame once it passes the end; a Speed of zero or less builds nothing
+                if (target.Element is GtImageElement && anim.EffectiveSpeed > 0)
+                {
+                    o.SequenceLoopSpeed = anim.EffectiveSpeed;
+                    o.SequenceLoopFrame = (long)Math.Floor(Math.Max(0.0, elapsed) * OutputFps + 1e-9);
+                }
+                break;
+
+            case GtAnimationType.Blink:
             {
-                double loop = Math.Max(anim.EffectiveDuration, 1e-6);
-                double phase = (time - anim.Delay) / loop;
-                o.SequencePosition = time < anim.Delay ? 0.0 : phase - Math.Floor(phase);
+                // GT's BlinkChangeConverter: a counter grows by Speed every second, the object shows for the first half of each whole number and hides for the second
+                double v = anim.EffectiveSpeed * Math.Max(0.0, elapsed);
+                if (v - Math.Truncate(v) >= 0.5) o.Hidden = true;
                 break;
             }
 
-            // FillOffset / StrokeOffset drift a brush's texture offset rather than the object, and Blink toggles visibility through a change converter; neither has anything to drive in this renderer yet, so exactly as GT does for an object with no such brush they build to nothing rather than throwing or guessing
             case GtAnimationType.FillOffset:
             case GtAnimationType.StrokeOffset:
-            case GtAnimationType.Blink:
+            {
+                // only an object that has that brush moves; layers and images have neither, so like GT they build nothing
+                bool fill = anim.Type == GtAnimationType.FillOffset;
+                if (target.Element is not { } el || (fill ? FillOf(el) : StrokeOf(el)) is null) break;
+                var (ux, uy) = BrushOffsetVector(dir);
+                double d = anim.EffectiveSpeed * Math.Max(0.0, elapsed);
+                if (fill) { o.FillOffsetX += ux * d; o.FillOffsetY += uy * d; }
+                else      { o.StrokeOffsetX += ux * d; o.StrokeOffsetY += uy * d; }
+                break;
+            }
+
             default:
                 break;
         }
     }
+
+    /// <summary>frame rate vMix's clock runs a title at in this preview; the per-frame continuous types (ImageSequenceLoop) depend on it, the others are per second</summary>
+    public const double OutputFps = 60;
+
+    /// <summary>where an ImageSequenceLoop has got to after <paramref name="frame"/> output frames on an <paramref name="frames"/>-frame sequence: the position climbs by Speed / frames each frame and falls back to 0 once it passes 1, and the image shows frame round((frames - 1) * position), GT's Stretched position mode, the only one its designer uses</summary>
+    public static double LoopPosition(double speed, long frame, int frames)
+    {
+        if (speed <= 0 || frames <= 0) return 0;
+        double step = speed / frames;
+        long cycle = (long)Math.Floor(1.0 / step) + 1;
+        return (frame % cycle) * step;
+    }
+
+    /// <summary>GT's OffsetTransition table: the unit change for each direction pad button; Center and None fall in with Left</summary>
+    private static (double X, double Y) BrushOffsetVector(GtAnimDirection dir) => dir switch
+    {
+        GtAnimDirection.TopLeft     => ( 1,  1),
+        GtAnimDirection.TopRight    => (-1,  1),
+        GtAnimDirection.BottomLeft  => ( 1, -1),
+        GtAnimDirection.BottomRight => (-1, -1),
+        GtAnimDirection.Top         => ( 0,  1),
+        GtAnimDirection.Bottom      => ( 0, -1),
+        GtAnimDirection.Right       => (-1,  0),
+        _                           => ( 1,  0),
+    };
+
+    private static GtBrush? FillOf(GtElement el) => el switch
+    {
+        GtRectangleElement r => r.Fill,
+        GtEllipseElement e   => e.Fill,
+        GtTextBlock t        => t.Fill,
+        _                    => null,
+    };
+
+    private static GtBrush? StrokeOf(GtElement el) => el switch
+    {
+        GtRectangleElement r => r.StrokeThickness > 0 ? r.Stroke : null,
+        GtEllipseElement e   => e.StrokeThickness > 0 ? e.Stroke : null,
+        GtTextBlock t        => t.StrokeThickness > 0 ? t.Stroke : null,
+        _                    => null,
+    };
 
     private static double Lerp(double from, double to, double t) => from + (to - from) * t;
 

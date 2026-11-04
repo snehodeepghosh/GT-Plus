@@ -75,3 +75,24 @@ the timeline bar.
 - Picking slot 2 or 3 while earlier slots are empty fills the gap with GT's own `<None Object="…"/>` placeholder rows,
   and **None** empties a slot the same way. These are exactly the rows GT writes, so the file stays plain GT.
 - Every change is one undo step.
+
+## Continuous storyboard
+
+The Continuous storyboard runs all the time in vMix, from the moment the title loads, separately from Transition In
+and Out. GT offers five types on it: **Blink**, **FillOffset**, **ImageSequenceLoop**, **RotateContinuous** and
+**StrokeOffset**. The preview plays them the way vMix's engine does:
+
+- **Only Speed and Direction count.** vMix ignores Delay, Duration, easing and Reverse for these types, so the strip
+  greys those out. Every type starts at time 0.
+- **RotateContinuous**: Speed = full turns per second. Center spins flat; Left/Right/Top/Bottom flip on one axis;
+  diagonals use both axes at the same speed.
+- **Blink**: Speed = blinks per second. The object is visible for the first half of each blink and hidden for the second.
+- **FillOffset / StrokeOffset**: slide the object's fill or stroke (a gradient or picture) in the chosen direction.
+  Nothing moves on a solid colour. The preview takes Speed as object widths per second and repeats the texture using
+  the brush's wrap mode. vMix's exact unit isn't documented, so check the speed in vMix.
+- **ImageSequenceLoop**: vMix ignores Duration and moves Speed ÷ frames along the sequence every output frame, then
+  jumps back to the first frame. Speed = frames ÷ (frames − 1) shows one image per title frame; the **Frames…** button
+  sets that for you. The preview assumes a 60 fps output, so at another frame rate the loop's real length is
+  frames ÷ that rate.
+- Up to three per object, like the other storyboards, and the slots add together. For example, RotateContinuous
+  Left and Top at different speeds makes an uneven tumble, which a single diagonal can't do.

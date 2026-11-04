@@ -142,6 +142,11 @@ images, UI aids, view state) stays in memory or preferences and is never written
   Interpolation/Speed (`GraphicsAnimationBuilder.CopyTo`), pad with `<None Object/>` placeholders to reach a later
   slot, None writes a placeholder. Targets: objects of the selected clips, else the canvas selection. One undo step
   (whole Animations list snapshot). `SlotsChanged` → `RefreshSlotUi`
+- **Continuous storyboard preview** (`GtAnimationEvaluator`): per vMix's builders, the 5 continuous types ignore Delay, Duration,
+  easing and Reverse (`elapsed = time`; `EarliestStart` skips them). Blink hides when frac(Speed·t) ≥ 0.5. Fill/StrokeOffset use
+  GT's OffsetTransition vector table → `GtAnimOverride.Fill/StrokeOffsetX/Y` (fraction of the box) → canvas `Slid()` translates
+  the brush (picture tiles; Pad gradients repeat). ImageSequenceLoop: `LoopPosition` = (frame mod (⌊frames/Speed⌋+1))·Speed/frames
+  at `OutputFps` 60, Stretched mode (the only one GT uses); the Frames… helper sets Speed = n/(n−1), not Duration.
 - **Timeline zoom**: `TimelinePanelControl.OnTrackWheel` (tunnel on `TrackScroller`) handles Cmd/Ctrl+wheel through
   `ZoomTimeline(factor, viewportX)`, which sets `ZoomSlider.Value` (→ `Track.PixelsPerSecond`) and shifts the scroll
   offset so the time under the pointer stays put (a pointer over the pinned gutter anchors at its edge)

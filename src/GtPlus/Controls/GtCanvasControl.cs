@@ -3297,7 +3297,8 @@ public class GtCanvasControl : Control
 
     private void RenderRectangle(DrawingContext ctx, GtRectangleElement rect, Rect bounds)
     {
-        var pen = rect.StrokeThickness > 0 ? MakePen(rect.Stroke, rect.StrokeThickness) : null;
+        var slide = _animationFrame?.ForElement(rect);
+        var pen = rect.StrokeThickness > 0 ? MakePen(rect.Stroke, rect.StrokeThickness, StrokeSlide(slide, bounds)) : null;
 
         if (rect.Fill?.Type == GtBrushType.RadialGradient)
         {
@@ -3306,7 +3307,7 @@ public class GtCanvasControl : Control
                 case GtRadialWrap.Mirror:
                 {
                     // Gradient reflects backwards through stops into the corners
-                    ctx.DrawRectangle(MakeRadialGradient(rect.Fill, GradientSpreadMethod.Reflect), pen, bounds);
+                    ctx.DrawRectangle(Slid(MakeRadialGradient(rect.Fill, GradientSpreadMethod.Reflect), FillSlide(slide, bounds)), pen, bounds);
                     return;
                 }
                 case GtRadialWrap.Clamp:
@@ -3332,7 +3333,7 @@ public class GtCanvasControl : Control
             }
         }
 
-        ctx.DrawRectangle(MakeBrush(rect.Fill), pen, bounds);
+        ctx.DrawRectangle(Slid(MakeBrush(rect.Fill), FillSlide(slide, bounds)), pen, bounds);
     }
 
     private void RenderEllipse(DrawingContext ctx, GtEllipseElement ellipse, Rect bounds)
@@ -3340,8 +3341,9 @@ public class GtCanvasControl : Control
         var center  = bounds.Center;
         var radiusX = bounds.Width  / 2;
         var radiusY = bounds.Height / 2;
-        var pen = ellipse.StrokeThickness > 0 ? MakePen(ellipse.Stroke, ellipse.StrokeThickness) : null;
-        ctx.DrawEllipse(MakeBrush(ellipse.Fill), pen, center, radiusX, radiusY);
+        var slide   = _animationFrame?.ForElement(ellipse);
+        var pen = ellipse.StrokeThickness > 0 ? MakePen(ellipse.Stroke, ellipse.StrokeThickness, StrokeSlide(slide, bounds)) : null;
+        ctx.DrawEllipse(Slid(MakeBrush(ellipse.Fill), FillSlide(slide, bounds)), pen, center, radiusX, radiusY);
     }
 
     private void RenderImage(DrawingContext ctx, GtImageElement img, Rect bounds)
@@ -3349,7 +3351,10 @@ public class GtCanvasControl : Control
         if (img.BitmapSource is null) return;
 
         // an ImageSequence animation (or the designer's saved scrub Position) selects which frame of the sequence this image resolves to
-        var position = _animationFrame?.ForElement(img)?.SequencePosition ?? img.SequencePosition;
+        var imgAnim  = _animationFrame?.ForElement(img);
+        var position = imgAnim?.SequenceLoopSpeed is { } loopSpeed
+            ? GtAnimationEvaluator.LoopPosition(loopSpeed, imgAnim.SequenceLoopFrame, _assets.FrameCount(img.BitmapSource))
+            : imgAnim?.SequencePosition ?? img.SequencePosition;
         var source   = position is { } p ? _assets.FrameAt(img.BitmapSource, p) : img.BitmapSource;
         if (source is null) return;
 
@@ -3631,7 +3636,8 @@ public class GtCanvasControl : Control
         var resolved  = GtTextFormat.Resolve(tb.Text);
         var text      = tb.Uppercase ? resolved.ToUpper() : resolved;
         var typeface  = FontFaces.Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight);
-        var fillBrush = MakeBrush(tb.Fill) ?? new SolidColorBrush(Colors.White);
+        var slide     = _animationFrame?.ForElement(tb);
+        var fillBrush = Slid(MakeBrush(tb.Fill), FillSlide(slide, bounds)) ?? new SolidColorBrush(Colors.White);
 
         var plan = ResolveTextPlan(tb, text, typeface, bounds);
         if (LayOutText(text, typeface, tb, plan, bounds, fillBrush) is not { } laid) return;
@@ -3646,7 +3652,7 @@ public class GtCanvasControl : Control
             DrawLines(ctx, laid.Lines, laid.Origins, shift);
 
             if (tb.Stroke is not null && tb.StrokeThickness > 0 &&
-                MakePen(tb.Stroke, tb.StrokeThickness) is { } pen &&
+                MakePen(tb.Stroke, tb.StrokeThickness, StrokeSlide(slide, bounds)) is { } pen &&
                 BuildGlyphGeometry(text, typeface, plan, laid, shift) is { } glyphs)
             {
                 ctx.DrawGeometry(null, pen, glyphs);
@@ -3929,10 +3935,31 @@ public class GtCanvasControl : Control
         };
     }
 
-    private IPen? MakePen(GtBrush? brush, double thickness = 1.0)
+    private IPen? MakePen(GtBrush? brush, double thickness = 1.0, Vector slide = default)
     {
-        var b = MakeBrush(brush);
+        var b = Slid(MakeBrush(brush), slide);
         return b is null ? null : new Pen(b, thickness);
+    }
+
+    /// <summary>how far a FillOffset / StrokeOffset has slid the brush, in pixels of <paramref name="bounds"/>; the slide is a fraction of the object's size and only its fractional part counts, so the texture repeats every object width</summary>
+    private static Vector FillSlide(GtAnimOverride? o, Rect bounds) =>
+        o is null ? default : SlideVector(o.FillOffsetX, o.FillOffsetY, bounds);
+
+    private static Vector StrokeSlide(GtAnimOverride? o, Rect bounds) =>
+        o is null ? default : SlideVector(o.StrokeOffsetX, o.StrokeOffsetY, bounds);
+
+    private static Vector SlideVector(double fx, double fy, Rect bounds) =>
+        new((fx - Math.Floor(fx)) * bounds.Width, (fy - Math.Floor(fy)) * bounds.Height);
+
+    /// <summary>the brush moved by <paramref name="slide"/>; a picture fill is tiled so the edge it slides away from fills in again, a solid colour has nothing to move</summary>
+    private static IBrush? Slid(IBrush? brush, Vector slide)
+    {
+        if (brush is not Brush b || b is SolidColorBrush || (slide.X == 0 && slide.Y == 0)) return brush;
+        if (b is ImageBrush image) image.TileMode = TileMode.Tile;
+        if (b is GradientBrush gradient && gradient.SpreadMethod == GradientSpreadMethod.Pad)
+            gradient.SpreadMethod = GradientSpreadMethod.Repeat;
+        b.Transform = new TranslateTransform(slide.X, slide.Y);
+        return b;
     }
 
     private static LinearGradientBrush MakeLinearGradient(GtBrush brush)

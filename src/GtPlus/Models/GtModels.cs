@@ -1031,7 +1031,7 @@ public class GtStoryboard
         {
             double min = 0;
             foreach (var a in Animations)
-                if (!a.IsPlaceholder && a.Delay < min) min = a.Delay;
+                if (!a.IsPlaceholder && !a.IsContinuousType && a.Delay < min) min = a.Delay;
             return min;
         }
     }

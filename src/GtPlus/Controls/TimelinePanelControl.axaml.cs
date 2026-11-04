@@ -1212,6 +1212,12 @@ public partial class TimelinePanelControl : UserControl
         SpeedBox.IsEnabled      = continuous;
         DurationLabel.IsEnabled = !continuous;
         DurationBox.IsEnabled   = !continuous;
+        // vMix starts the continuous types the moment the title loads and never eases or reverses them, so these do nothing there
+        DelayLabel.IsEnabled    = !continuous;
+        DelayBox.IsEnabled      = !continuous;
+        EasingLabel.IsEnabled   = !continuous;
+        EasingCombo.IsEnabled   = !continuous;
+        ReverseCheck.IsEnabled  = !continuous;
 
         // the frame-count helper only means anything when the clip actually drives a sequence of more than one frame
         SequenceLengthButton.IsEnabled = SequenceFrameCount(anim) > 1;
@@ -1270,7 +1276,7 @@ public partial class TimelinePanelControl : UserControl
         _ = FitSequenceLengthAsync(anim, targets);
     }
 
-    /// <summary>sets clip length from the sequence's frame count and a frame rate the user picks: an ImageSequence fits the whole sequence into Duration (and an ImageSequenceLoop makes one loop that long), so frames / fps is the length that plays it at one frame per title frame; each target is retimed against its own frame count so one fps answers for a whole group</summary>
+    /// <summary>sets clip timing from the sequence's frame count and a frame rate the user picks: an ImageSequence fits the whole sequence into Duration (frames / fps), an ImageSequenceLoop gets the Speed that plays it at that rate, since vMix ignores a loop's Duration; each target is retimed against its own frame count so one fps answers for a whole group</summary>
     private async System.Threading.Tasks.Task FitSequenceLengthAsync(
         GtAnimation anim, IReadOnlyList<GtAnimation> targets)
     {
@@ -1279,14 +1285,21 @@ public partial class TimelinePanelControl : UserControl
 
         if (TopLevel.GetTopLevel(this) is not Window owner) return;
 
-        var dialog = new SequenceLengthWindow(anim.Object, frames, _sequenceFps, anim.EffectiveDuration);
+        var dialog = new SequenceLengthWindow(anim.Object, frames, _sequenceFps, anim.EffectiveDuration,
+                                              anim.Type == GtAnimationType.ImageSequenceLoop, anim.EffectiveSpeed);
         if (!await dialog.ShowDialog<bool>(owner)) return;
 
         _sequenceFps = dialog.Fps;
 
         var befores = targets.Select(t => t.Clone()).ToList();
         foreach (var target in targets)
-            target.Duration = Math.Max(0.01, Math.Round(SequenceFrameCount(target) / _sequenceFps, 3));
+        {
+            int n = SequenceFrameCount(target);
+            if (target.Type == GtAnimationType.ImageSequenceLoop)
+                target.Speed = LoopSpeedFor(n);
+            else
+                target.Duration = Math.Max(0.01, Math.Round(n / _sequenceFps, 3));
+        }
         var afters = targets.Select(t => t.Clone()).ToList();
 
         var description = targets.Count > 1
@@ -1298,6 +1311,10 @@ public partial class TimelinePanelControl : UserControl
         LoadPropertyStrip(anim);
         AfterModelChange();
     }
+
+    /// <summary>the ImageSequenceLoop Speed that shows one sequence frame per title frame, whatever the title's frame rate: vMix ignores a loop's Duration, moves the position Speed / frames every output frame and shows frame round((frames - 1) * position), so Speed = frames / (frames - 1)</summary>
+    private static double LoopSpeedFor(int frames) =>
+        frames <= 1 ? 1.0 : Math.Round(frames / (frames - 1.0), 4);
 
     /// <summary>true when an ImageSequence clip can be added for <paramref name="element"/>: it draws a multi-frame sequence and the timeline is showing a storyboard to hold the clip; with no storyboard picked there is nothing to add to, so the entry points grey out rather than inventing one</summary>
     public bool CanAddSequenceAnimation(GtElement? element) =>
@@ -1327,7 +1344,8 @@ public partial class TimelinePanelControl : UserControl
             TypeName = loop ? "ImageSequenceLoop" : "ImageSequence",
             Type     = loop ? GtAnimationType.ImageSequenceLoop : GtAnimationType.ImageSequence,
             Object   = element.Name,
-            Duration = Math.Max(0.01, Math.Round(frames / _sequenceFps, 3)),
+            Duration = loop ? null : Math.Max(0.01, Math.Round(frames / _sequenceFps, 3)),
+            Speed    = loop ? LoopSpeedFor(frames) : null,
         };
 
         var owner = storyboard;
