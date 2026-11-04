@@ -34,7 +34,8 @@ face isn't installed does it fall back to reading the family and weight out of t
 
 ## Faux italic
 
-The slanted **I** button next to Italic in the Font group applies faux italic the way Photoshop does it: the text
+The **faux italic** button, a plain I leaning inside a slanted frame next to the serif-italic **Italic** button in the
+Font group, applies faux italic the way Photoshop does it: the text
 slants forward by 10°.
 
 - It is saved as GT's own Skew effect (`<Effect Type="Skew" Angle="10,0" />`), slanting about the text's centre, so

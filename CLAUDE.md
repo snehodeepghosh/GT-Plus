@@ -113,9 +113,11 @@ images, UI aids, view state) stays in memory or preferences and is never written
     `TickerFrame` - a 60 fps DispatcherTimer counting frames. A storyboard preview takes the
     clock over while `AnimationFrame` is set; frame 0 draws tickers at rest
 - **`LayersPanelControl.axaml/.cs`** - layers panel; populated via `Populate(GtDocument)`, syncs selection highlight via `Canvas` property
-- **`TimelineTrackControl.cs`** - the storyboard track, custom-drawn in Figma's motion-timeline layout: per object a
+- **`TimelineTrackControl.cs`** - the storyboard track, custom-drawn in Figma's motion-timeline layout: animated objects
+  are grouped under their GT layer (`RowKind.Layer`, from `Document`; top layer first; a layer's own animations sit
+  directly under it; `Row.Depth` drives the indent; `IsGroup` = Layer or Object), then per object a
   collapsible group row with a grey summary bar over all its animations, then one row per animation drawn as a start
-  and end keyframe diamond joined by a line (type colour on the diamonds, direction arrow beside the name, hollow
+  and end keyframe joined by a line (shape by easing: diamond linear, circle ease, square bounce; `KeyShapes`) (type colour on the diamonds, direction arrow beside the name, hollow
   start diamond = Reverse). Drag a diamond to retime that end, the line to move, a group bar to move every animation
   of that object; the gutter chevron folds a group (`IsCollapsed`/`SetCollapsed`), a group's eye mutes all of it.
   The ruler and name gutter are pinned: `TimelinePanelControl` feeds `TrackScroller.Offset` into `ScrollOffset`, and

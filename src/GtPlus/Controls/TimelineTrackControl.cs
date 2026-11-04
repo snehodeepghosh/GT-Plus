@@ -47,8 +47,12 @@ public class TimelineTrackControl : Control
     private const double ChevronWidth  = 16;
     private const double ChildIndent   = 22;
 
+    /// <summary>how far each tree level (layer, object, animation) steps in</summary>
+    private const double DepthIndent   = 14;
+
     private static readonly IBrush RowBrush      = new SolidColorBrush(Color.FromRgb(0x1b, 0x1b, 0x1b));
     private static readonly IBrush ObjectRowBrush = new SolidColorBrush(Color.FromRgb(0x1f, 0x1f, 0x1f));
+    private static readonly IBrush LayerRowBrush  = new SolidColorBrush(Color.FromRgb(0x24, 0x24, 0x24));
     private static readonly IBrush GutterBrush   = new SolidColorBrush(Color.FromRgb(0x17, 0x17, 0x17));
     private static readonly IBrush RulerBrush    = new SolidColorBrush(Color.FromRgb(0x1b, 0x1b, 0x1b));
     private static readonly IBrush LabelBrush    = new SolidColorBrush(Color.FromRgb(0xe6, 0xe6, 0xe6));
@@ -104,7 +108,7 @@ public class TimelineTrackControl : Control
     /// <summary>objects whose animation rows are folded away, per storyboard</summary>
     private readonly HashSet<(GtStoryboard Storyboard, string Object)> _collapsed = new();
 
-    private enum RowKind { Header, Object, Animation }
+    private enum RowKind { Header, Layer, Object, Animation }
 
     private sealed class Row
     {
@@ -121,6 +125,15 @@ public class TimelineTrackControl : Control
         public List<GtAnimation> Children { get; } = new();
 
         public bool IsHeader => Kind == RowKind.Header;
+
+        /// <summary>a row that stands for several animations: a layer or an object</summary>
+        public bool IsGroup => Kind is RowKind.Layer or RowKind.Object;
+
+        /// <summary>tree depth: 0 for a layer (or an object no layer holds), 1 for an object or a layer's own animation, 2 for an object's animation</summary>
+        public int Depth { get; init; }
+
+        /// <summary>the layer name a Layer row shows</summary>
+        public string Label { get; init; } = "";
     }
 
     /// <summary>an animation's timing before a drag started, for the history entry</summary>
@@ -199,6 +212,15 @@ public class TimelineTrackControl : Control
 
     /// <summary>fires when the track grows or shrinks at its left edge, with the pixels the existing content moved right by; the host adds it to the scroll offset so the picture stays put</summary>
     public event Action<double>? ContentShifted;
+
+    private GtDocument? _document;
+
+    /// <summary>the title the storyboards animate; gives each animated object its GT layer so the track can group objects under their layer, as the Layers panel does</summary>
+    public GtDocument? Document
+    {
+        get => _document;
+        set { _document = value; Refresh(); }
+    }
 
     /// <summary>storyboards shown on the timeline, each at its own offset</summary>
     public IReadOnlyList<GtTimelineSegment> Segments
@@ -293,6 +315,9 @@ public class TimelineTrackControl : Control
         InvalidateVisual();
     }
 
+    /// <summary>a layer's fold key, kept apart from object names (a layer and an object may share a name)</summary>
+    private static string LayerKey(string layerName) => "\u0001layer:" + layerName;
+
     private static string ObjectKey(GtAnimation anim) =>
         string.IsNullOrEmpty(anim.Object) ? "(no object)" : anim.Object;
 
@@ -324,12 +349,56 @@ public class TimelineTrackControl : Control
                 group.Children.Add(anim);
             }
 
-            foreach (var group in groups)
+            // then gathered under their GT layer, top layer first as in the Layers panel; an animation aimed at a layer
+            // itself sits directly under that layer's row, and objects the title does not hold stay ungrouped at the end
+            var layerOf = new Dictionary<string, GtLayer>(StringComparer.OrdinalIgnoreCase);
+            var layerByName = new Dictionary<string, GtLayer>(StringComparer.OrdinalIgnoreCase);
+            if (_document is not null)
+                foreach (var layer in _document.Layers)
+                {
+                    if (!string.IsNullOrEmpty(layer.Name)) layerByName.TryAdd(layer.Name, layer);
+                    foreach (var el in layer.Elements)
+                        if (!string.IsNullOrEmpty(el.Name)) layerOf.TryAdd(el.Name, layer);
+                }
+
+            var placed = new HashSet<Row>();
+            if (_document is not null)
             {
-                _rows.Add(group);
-                if (_collapsed.Contains((segment.Storyboard, group.ObjectName))) continue;
+                for (int li = _document.Layers.Count - 1; li >= 0; li--)
+                {
+                    var layer = _document.Layers[li];
+                    var own = groups.FirstOrDefault(g => layerByName.TryGetValue(g.ObjectName, out var l) && ReferenceEquals(l, layer)
+                                                         && !layerOf.ContainsKey(g.ObjectName));
+                    var objects = groups.Where(g => g != own && layerOf.TryGetValue(g.ObjectName, out var l) && ReferenceEquals(l, layer))
+                                        .OrderByDescending(g => layer.Elements.FindIndex(e => string.Equals(e.Name, g.ObjectName, StringComparison.OrdinalIgnoreCase)))
+                                        .ToList();
+                    if (own is null && objects.Count == 0) continue;
+
+                    var layerRow = new Row { Kind = RowKind.Layer, Segment = segment, ObjectName = LayerKey(layer.Name), Label = layer.Name, Depth = 0 };
+                    if (own is not null) layerRow.Children.AddRange(own.Children);
+                    foreach (var o in objects) layerRow.Children.AddRange(o.Children);
+                    _rows.Add(layerRow);
+                    if (own is not null) placed.Add(own);
+                    placed.UnionWith(objects);
+                    if (_collapsed.Contains((segment.Storyboard, layerRow.ObjectName))) continue;
+
+                    if (own is not null)
+                        foreach (var anim in own.Children)
+                            _rows.Add(new Row { Kind = RowKind.Animation, Segment = segment, Animation = anim, ObjectName = layerRow.ObjectName, Depth = 1 });
+                    foreach (var o in objects) AddObject(o, 1);
+                }
+            }
+            foreach (var g in groups)
+                if (!placed.Contains(g)) AddObject(g, 0);
+
+            void AddObject(Row group, int depth)
+            {
+                var row = new Row { Kind = RowKind.Object, Segment = segment, ObjectName = group.ObjectName, Depth = depth };
+                row.Children.AddRange(group.Children);
+                _rows.Add(row);
+                if (_collapsed.Contains((segment.Storyboard, group.ObjectName))) return;
                 foreach (var anim in group.Children)
-                    _rows.Add(new Row { Kind = RowKind.Animation, Segment = segment, Animation = anim, ObjectName = group.ObjectName });
+                    _rows.Add(new Row { Kind = RowKind.Animation, Segment = segment, Animation = anim, ObjectName = group.ObjectName, Depth = depth + 1 });
             }
         }
 
@@ -384,7 +453,9 @@ public class TimelineTrackControl : Control
 
     /// <summary>the fold chevron's box on an object row</summary>
     private Rect ChevronRect(int index) =>
-        new(GutterLeft + ObjectIndent, RowTop(index), ChevronWidth, RowHeight);
+        new(GutterLeft + ObjectIndent + RowDepth(index) * DepthIndent, RowTop(index), ChevronWidth, RowHeight);
+
+    private int RowDepth(int index) => index >= 0 && index < _rows.Count ? _rows[index].Depth : 0;
 
     private double ObjectIndent => _segments.Count > 1 ? SegmentIndent : 2;
 
@@ -473,6 +544,7 @@ public class TimelineTrackControl : Control
                 {
                     RowKind.Header => HeaderBrush,
                     RowKind.Object => ObjectRowBrush,
+                    RowKind.Layer  => LayerRowBrush,
                     _              => RowBrush,
                 };
             ctx.DrawRectangle(brush, null, new Rect(0, y, width, RowHeight));
@@ -633,6 +705,7 @@ public class TimelineTrackControl : Control
             }
 
             case RowKind.Object:
+            case RowKind.Layer:
             {
                 if (row.Children.Count == 0) return;
                 var rect = BarRect(row, index);
@@ -669,22 +742,45 @@ public class TimelineTrackControl : Control
                     var line = selected ? new Pen(SelectedBrush, 1.5) : KeyLinePen;
                     ctx.DrawLine(line, new Point(rect.X, cy), new Point(rect.Right, cy));
 
-                    // a reverse animation settles at its start, so its start diamond is the hollow one
-                    DrawDiamond(ctx, rect.X,     cy, accent, selected, hollow: anim.Reverse);
-                    DrawDiamond(ctx, rect.Right, cy, accent, selected, hollow: false);
+                    // a reverse animation settles at its start, so its start keyframe is the hollow one; the shape of each
+                    // keyframe says how the motion behaves there (see KeyShape)
+                    var (startShape, endShape) = KeyShapes(anim.Interpolation);
+                    DrawKeyframe(ctx, rect.X,     cy, accent, selected, hollow: anim.Reverse, startShape);
+                    DrawKeyframe(ctx, rect.Right, cy, accent, selected, hollow: false,        endShape);
                 }
                 return;
             }
         }
     }
 
-    private static void DrawDiamond(DrawingContext ctx, double x, double cy, Color accent, bool selected, bool hollow)
+    /// <summary>
+    /// keyframe shapes, After Effects' visual language: a diamond where the motion is linear, a circle where it eases (slows),
+    /// a square where it bounces. GT's easing names follow WPF: "In" acts at the start of the animation, "Out" at its end
+    /// </summary>
+    private enum KeyShape { Linear, Ease, Bounce }
+
+    private static (KeyShape Start, KeyShape End) KeyShapes(GtInterpolation easing) => easing switch
+    {
+        GtInterpolation.CubicEasingIn    => (KeyShape.Ease,   KeyShape.Linear),
+        GtInterpolation.CubicEasingOut   => (KeyShape.Linear, KeyShape.Ease),
+        GtInterpolation.CubicEasingInOut => (KeyShape.Ease,   KeyShape.Ease),
+        GtInterpolation.BounceIn         => (KeyShape.Bounce, KeyShape.Linear),
+        GtInterpolation.BounceOut        => (KeyShape.Linear, KeyShape.Bounce),
+        _                                => (KeyShape.Linear, KeyShape.Linear),
+    };
+
+    private static void DrawKeyframe(DrawingContext ctx, double x, double cy, Color accent, bool selected, bool hollow, KeyShape shape)
     {
         double r = DiamondSize / 2;
-        var geo = new PolylineGeometry(new[]
+        Geometry geo = shape switch
         {
-            new Point(x, cy - r), new Point(x + r, cy), new Point(x, cy + r), new Point(x - r, cy),
-        }, true);
+            KeyShape.Ease   => new EllipseGeometry(new Rect(x - r + 0.5, cy - r + 0.5, DiamondSize - 1, DiamondSize - 1)),
+            KeyShape.Bounce => new RectangleGeometry(new Rect(x - r + 1, cy - r + 1, DiamondSize - 2, DiamondSize - 2)),
+            _ => new PolylineGeometry(new[]
+            {
+                new Point(x, cy - r), new Point(x + r, cy), new Point(x, cy + r), new Point(x - r, cy),
+            }, true),
+        };
 
         IBrush fill = hollow ? new SolidColorBrush(Color.FromRgb(0x1b, 0x1b, 0x1b)) : new SolidColorBrush(accent);
         var pen = selected ? new Pen(Brushes.White, 1.5) : new Pen(new SolidColorBrush(accent), 1);
@@ -708,7 +804,7 @@ public class TimelineTrackControl : Control
 
         var eye = MuteRect(index);
 
-        if (row.Kind == RowKind.Object)
+        if (row.IsGroup)
         {
             bool collapsed = IsCollapsed(row.Segment.Storyboard, row.ObjectName);
             bool allMuted  = row.Children.All(a => a.Muted);
@@ -725,8 +821,18 @@ public class TimelineTrackControl : Control
             DrawEye(ctx, eye, allMuted);
 
             double textX = chev.Right + 2;
-            using (ctx.PushClip(new Rect(textX, y, eye.X - 4 - textX, RowHeight)))
-                DrawText(ctx, row.ObjectName, textX, y + 4, allMuted ? DimLabelBrush : LabelBrush, 11, FontWeight.SemiBold);
+            if (row.Kind == RowKind.Layer)
+            {
+                // a small stacked-sheets glyph marks a GT layer, as the Layers panel's own layer rows read
+                var g = Geometry.Parse("M 0,3 L 5,0.5 L 10,3 L 5,5.5 Z M 0,6 L 5,8.5 L 10,6");
+                using (ctx.PushTransform(Matrix.CreateTranslation(textX, y + RowHeight / 2 - 4.5)))
+                    ctx.DrawGeometry(null, new Pen(allMuted ? DimLabelBrush : SubLabelBrush, 1.1, lineJoin: PenLineJoin.Round), g);
+                textX += 14;
+            }
+            var name = row.Kind == RowKind.Layer ? row.Label : row.ObjectName;
+            using (ctx.PushClip(new Rect(textX, y, Math.Max(0, eye.X - 4 - textX), RowHeight)))
+                DrawText(ctx, name, textX, y + 4, allMuted ? DimLabelBrush : LabelBrush, 11,
+                         row.Kind == RowKind.Layer ? FontWeight.Bold : FontWeight.SemiBold);
 
             // a folded group says how many animations it hides
             if (collapsed && row.Children.Count > 1)
@@ -737,7 +843,8 @@ public class TimelineTrackControl : Control
         var anim = row.Animation!;
 
         // tree connector from the object's chevron down to this row, Figma's └
-        double treeX = GutterLeft + ObjectIndent + ChevronWidth / 2;
+        double parentX = GutterLeft + ObjectIndent + Math.Max(0, row.Depth - 1) * DepthIndent;
+        double treeX = parentX + ChevronWidth / 2;
         bool last = index + 1 >= _rows.Count || _rows[index + 1].Kind != RowKind.Animation
                     || !ReferenceEquals(_rows[index + 1].Segment, row.Segment)
                     || _rows[index + 1].ObjectName != row.ObjectName;
@@ -746,7 +853,7 @@ public class TimelineTrackControl : Control
 
         DrawEye(ctx, eye, anim.Muted);
 
-        double nameX = GutterLeft + ObjectIndent + ChildIndent;
+        double nameX = parentX + ChildIndent;
         double nameRight = eye.X - 4;
 
         // the direction arrow sits just left of the eye, the way it sat on the old bar's right end
@@ -808,7 +915,7 @@ public class TimelineTrackControl : Control
     private bool RowIsSelected(Row row) => row.Kind switch
     {
         RowKind.Animation => IsSelected(row.Animation!),
-        RowKind.Object    => row.Children.Count > 0 && row.Children.All(IsSelected),
+        RowKind.Object or RowKind.Layer => row.Children.Count > 0 && row.Children.All(IsSelected),
         _                 => false,
     };
 
@@ -895,8 +1002,8 @@ public class TimelineTrackControl : Control
         }
 
         var (hitRow, rect) = hit.Value;
-        var targets = hitRow.Kind == RowKind.Object ? hitRow.Children : new List<GtAnimation> { hitRow.Animation! };
-        var anim    = hitRow.Kind == RowKind.Object ? targets.OrderBy(a => a.Delay).First() : hitRow.Animation!;
+        var targets = hitRow.IsGroup ? hitRow.Children : new List<GtAnimation> { hitRow.Animation! };
+        var anim    = hitRow.IsGroup ? targets.OrderBy(a => a.Delay).First() : hitRow.Animation!;
 
         if (ctrl || shift)
         {
@@ -966,7 +1073,7 @@ public class TimelineTrackControl : Control
         // grown a little: the eye is 13px, and a pixel-exact target is fussy to hit
         if (MuteRect(index).Inflate(3).Contains(p))
         {
-            var targets = row.Kind == RowKind.Object ? row.Children : new List<GtAnimation> { row.Animation! };
+            var targets = row.IsGroup ? row.Children : new List<GtAnimation> { row.Animation! };
             // a group's eye mutes everything under it unless everything already is, in which case it brings it all back
             bool mute = !targets.All(a => a.Muted);
             foreach (var t in targets)
@@ -979,14 +1086,14 @@ public class TimelineTrackControl : Control
             return;
         }
 
-        if (row.Kind == RowKind.Object && ChevronRect(index).Contains(p))
+        if (row.IsGroup && ChevronRect(index).Contains(p))
         {
             SetCollapsed(row.Segment.Storyboard, row.ObjectName,
                          !IsCollapsed(row.Segment.Storyboard, row.ObjectName));
             return;
         }
 
-        var picked = row.Kind == RowKind.Object ? row.Children : new List<GtAnimation> { row.Animation! };
+        var picked = row.IsGroup ? row.Children : new List<GtAnimation> { row.Animation! };
         if (toggle)
         {
             bool allIn = picked.All(IsSelected);
@@ -1193,7 +1300,7 @@ public class TimelineTrackControl : Control
         if (index < 0 || index >= _rows.Count) return null;
 
         var row = _rows[index];
-        if (row.IsHeader || (row.Kind == RowKind.Object && row.Children.Count == 0)) return null;
+        if (row.IsHeader || (row.IsGroup && row.Children.Count == 0)) return null;
 
         var rect = BarRect(row, index);
         return rect.Inflate(new Thickness(EdgeGrab, 0, EdgeGrab, 0)).Contains(p) ? (row, rect) : null;

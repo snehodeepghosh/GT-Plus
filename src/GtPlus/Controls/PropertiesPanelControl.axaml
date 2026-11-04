@@ -316,17 +316,22 @@
                                                       ToolTip.Tip="Font weight"
                                                       SelectionChanged="FontWeightBox_SelectionChanged"/>
                                             <ToggleButton x:Name="ItalicButton" Classes="rb sm" Margin="4,0,0,0"
-                                                          ToolTip.Tip="Italic" Click="ItalicButton_Click">
-                                                <TextBlock Text="I" FontStyle="Italic" FontWeight="SemiBold"/>
+                                                          ToolTip.Tip="Italic: the font's own italic face" Click="ItalicButton_Click">
+                                                <!-- a serif italic I: its curved, calligraphic shape reads as a true italic face -->
+                                                <TextBlock Text="I" FontFamily="Georgia, Times New Roman, serif" FontStyle="Italic"
+                                                           FontWeight="Bold" FontSize="15" Margin="1,-1,1,0"/>
                                             </ToggleButton>
                                             <ToggleButton x:Name="FauxItalicButton" Classes="rb sm"
                                                           ToolTip.Tip="Faux italic, as Photoshop does it: slants the text forward 10° about its centre. Saved as GT's own Skew effect, so vMix shows the same slant"
                                                           Click="FauxItalicButton_Click">
-                                                <TextBlock Text="I" FontWeight="SemiBold" Foreground="#9ccdf5">
-                                                    <TextBlock.RenderTransform>
-                                                        <SkewTransform AngleX="-10"/>
-                                                    </TextBlock.RenderTransform>
-                                                </TextBlock>
+                                                <!-- an upright sans I inside a leaning frame: the letter is not italic, the box is slanted -->
+                                                <Canvas Width="16" Height="16">
+                                                    <Path Data="M 5,1.5 L 16,1.5 L 11,14.5 L 0,14.5 Z" Stroke="#9a9a9a" StrokeThickness="1"
+                                                          StrokeJoin="Round"/>
+                                                    <!-- the letter is the plain upright I, leaned by the same shear as its frame -->
+                                                    <Path Data="M 6.5,4 L 11.5,4 M 9,4 L 7,12 M 4.5,12 L 9.5,12" Stroke="#ececec"
+                                                          StrokeThickness="1.6" StrokeLineCap="Round"/>
+                                                </Canvas>
                                             </ToggleButton>
                                             <ToggleButton x:Name="UnderlineButton" Classes="rb sm"
                                                           ToolTip.Tip="Underline" Click="UnderlineButton_Click">

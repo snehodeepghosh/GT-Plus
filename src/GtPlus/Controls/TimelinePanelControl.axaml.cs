@@ -222,6 +222,7 @@ public partial class TimelinePanelControl : UserControl
     {
         Stop();
         _document = document;
+        Track.Document = document;
 
         // dropped before the rebuild so a same-named view from the previous document cannot be restored, which would leave the track pointing at the old storyboards
         _view = null;
