@@ -179,7 +179,7 @@
                             <TextBlock Classes="caption" DockPanel.Dock="Bottom" Text="Storyboard"/>
                             <StackPanel Orientation="Horizontal" Spacing="2">
                                 <ToggleButton x:Name="TimelineToggleButton" Classes="rb lg" IsChecked="False"
-                                              ToolTip.Tip="Storyboard timeline (Ctrl+T)"
+                                              ToolTip.Tip="Storyboard timeline (Ctrl+Shift+T)"
                                               Click="TimelineToggleButton_Click">
                                     <StackPanel>
                                         <Path Classes="ic" Data="M 3,6 L 14,6 M 7,12 L 21,12 M 3,18 L 12,18 M 17,3 L 17,9 M 4,9 L 4,15 M 15,15 L 15,21"/>
@@ -493,7 +493,7 @@
             </Grid>
         </Border>
 
-        <!-- storyboard timeline, collapsed until toggled (Ctrl+T); declared after the status bar so it docks above it -->
+        <!-- storyboard timeline, collapsed until toggled (Ctrl+Shift+T); declared after the status bar so it docks above it -->
         <controls:TimelinePanelControl x:Name="TimelinePanel"
                                        DockPanel.Dock="Bottom"
                                        Height="196"

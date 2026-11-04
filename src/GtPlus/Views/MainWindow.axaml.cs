@@ -814,6 +814,8 @@ public partial class MainWindow : Window
         // while an interactive web page holds the keyboard, a bare letter is text for the page and not a tool shortcut
         if (GtCanvas.WebInputFocused && e.KeyModifiers == KeyModifiers.None) return;
 
+        if (GtCanvas.IsFreeTransforming && !IsTextInputSource(e.Source) && HandleFreeTransformKey(e)) return;
+
         switch (e.Key)
         {
             case Key.V when e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox:
@@ -899,7 +901,11 @@ public partial class MainWindow : Window
                 DoDuplicateLayer();
                 e.Handled = true;
                 break;
-            case Key.T when e.KeyModifiers == PlatformKeys.Command:
+            case Key.T when e.KeyModifiers == PlatformKeys.Command && !IsTextInputSource(e.Source):
+                DoFreeTransform();
+                e.Handled = true;
+                break;
+            case Key.T when e.KeyModifiers == (PlatformKeys.Command | KeyModifiers.Shift):
                 SetTimelineVisible(!TimelinePanel.IsVisible);
                 e.Handled = true;
                 break;
@@ -976,9 +982,62 @@ public partial class MainWindow : Window
             _         => (0d, 0d),
         };
 
+        if (GtCanvas.IsFreeTransforming) { GtCanvas.NudgeFreeTransform(dx, dy); return true; }
         if (!GtCanvas.NudgeSelection(dx, dy)) return false;
         StatusText.Text = $"Moved {GtCanvas.SelectedElements.Count} element(s) by {dx:0.##}, {dy:0.##}";
         return true;
+    }
+
+    /// <summary>Cmd/Ctrl+T: Photoshop's Free Transform on the one selected object</summary>
+    private void DoFreeTransform()
+    {
+        if (GtCanvas.IsFreeTransforming) return;
+        if (!GtCanvas.BeginFreeTransform())
+        {
+            StatusText.Text = GtCanvas.SelectedElements.Count == 1
+                ? "Free Transform: the selected object or its layer is locked"
+                : "Free Transform works on one object: select a single object first";
+            return;
+        }
+        SetTool(CanvasTool.Edit);
+        StatusText.Text = "Free Transform: drag a handle to scale (Shift: free, Option: from centre), drag outside to rotate " +
+                          "(Shift: 15°), drag inside to move. Enter applies, Esc cancels";
+    }
+
+    /// <summary>keys while Free Transform is on: Enter applies, Esc and Cmd+Z cancel, Cmd+T does nothing more; any other command applies the transform first and then runs as usual. Modifiers, arrows (nudge inside the session), Space and zoom keys leave it running</summary>
+    private bool HandleFreeTransformKey(KeyEventArgs e)
+    {
+        var mods = e.KeyModifiers;
+        switch (e.Key)
+        {
+            case Key.Enter or Key.Return when mods == KeyModifiers.None:
+                GtCanvas.CommitFreeTransform();
+                StatusText.Text = "Transform applied";
+                e.Handled = true;
+                return true;
+            case Key.Escape when mods == KeyModifiers.None:
+                GtCanvas.CancelFreeTransform();
+                StatusText.Text = "Transform cancelled";
+                e.Handled = true;
+                return true;
+            case Key.Z when mods == PlatformKeys.Command:
+                GtCanvas.CancelFreeTransform();
+                StatusText.Text = "Transform cancelled";
+                e.Handled = true;
+                return true;
+            case Key.T when mods == PlatformKeys.Command:
+                e.Handled = true;
+                return true;
+            case Key.LeftShift or Key.RightShift or Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+              or Key.LWin or Key.RWin or Key.Left or Key.Right or Key.Up or Key.Down or Key.Space:
+                return false;
+            case Key.OemPlus or Key.OemMinus or Key.Add or Key.Subtract or Key.D0 or Key.NumPad0
+                when PlatformKeys.HasCommand(mods):
+                return false;
+            default:
+                GtCanvas.CommitFreeTransform();
+                return false;
+        }
     }
 
     private void NewLayer_Click(object? sender, RoutedEventArgs e)       => DoNewLayer();

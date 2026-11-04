@@ -25,6 +25,25 @@ opposite side moves out, or in, by the same amount, so the object stays centred 
 - Press or release Option during the drag to switch modes as you go.
 - With several objects selected, each resizes about its own centre.
 
+## Free Transform (Cmd+T)
+
+As in Photoshop, **Cmd+T** (Ctrl+T on Windows) puts one selected object into Free Transform. A box with eight handles
+and a centre reference point appears, turned with the object.
+
+- **Drag a corner** to scale with the proportions kept; hold **Shift** to scale freely. **Drag a side** to stretch one
+  way. Hold **Option** (Alt) to scale from the centre.
+- **Drag anywhere outside the box** to rotate about the centre; hold **Shift** to snap to 15° steps.
+- **Drag inside the box** to move it; the arrow keys nudge it.
+- **Enter**, or a double-click inside the box, applies the transform. **Esc** (or Cmd+Z) puts the object back as it
+  was. The whole transform is one undo step.
+- Selecting something else, switching tools or using another command applies it first.
+- The pointer shows Photoshop's cursors: a double arrow along the direction a handle pulls (turned with the box), and
+  the curved rotate arrow outside the box. The ordinary Move tool handles use the same arrows.
+- It works on one unlocked object at a time. It changes the object's Location, Width/Height and Rotate Z, which are
+  plain GT attributes, so the file stays plain GT.
+
+The storyboard timeline's show/hide shortcut moved to **Cmd+Shift+T** to make room.
+
 ## Background
 
 **View › Background** switches what shows behind the title:

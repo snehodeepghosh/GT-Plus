@@ -27,7 +27,7 @@ public enum CanvasTool  { Select, Edit, TextBox, Rectangle, Ticker, Web }
 public enum ResizeHandle { None, NW, N, NE, E, SE, S, SW, W }
 
 /// <summary>custom control that renders a GtDocument onto an Avalonia DrawingContext; supports element selection (click, shift+click, ctrl+drag-box) and per-element outside-canvas opacity dimming</summary>
-public class GtCanvasControl : Control
+public partial class GtCanvasControl : Control
 {
     public GtCanvasControl()
     {
@@ -246,6 +246,7 @@ public class GtCanvasControl : Control
     public void ClearSelection()
     {
         CommitNudge();
+        CommitFreeTransform();
         _selectedElements.Clear();
         _selectedLayer = null;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
@@ -255,6 +256,7 @@ public class GtCanvasControl : Control
     public void SetSelection(GtElement element, bool addToSelection = false)
     {
         CommitNudge();
+        CommitFreeTransform();
         if (!addToSelection) _selectedElements.Clear();
         _selectedLayer = null;
         _selectedElements.Add(element);
@@ -265,6 +267,7 @@ public class GtCanvasControl : Control
     public void ToggleSelection(GtElement element)
     {
         CommitNudge();
+        CommitFreeTransform();
         _selectedLayer = null;
         if (!_selectedElements.Remove(element))
             _selectedElements.Add(element);
@@ -276,6 +279,7 @@ public class GtCanvasControl : Control
     public void SetLayerSelection(GtLayer? layer)
     {
         CommitNudge();
+        CommitFreeTransform();
         if (layer is not null) _selectedElements.Clear();
         _selectedLayer = layer;
         SelectionChanged?.Invoke(this, EventArgs.Empty);
@@ -746,6 +750,7 @@ public class GtCanvasControl : Control
             InvalidateVisual();
         else if (change.Property == ActiveToolProperty)
         {
+            CommitFreeTransform();
             _isMoving     = false;
             _isResizing   = false;
             _isDragBoxing  = false;
@@ -770,6 +775,7 @@ public class GtCanvasControl : Control
         get => _document;
         set
         {
+            if (_ft is not null) { _ft = null; _ftDrag = FreeTransformDrag.None; FreeTransformChanged?.Invoke(this, EventArgs.Empty); }
             _document = value;
             _bitmapCache.Clear();
             ClearSequenceCache();
@@ -805,7 +811,7 @@ public class GtCanvasControl : Control
             _animationFrame = value;
 
             // a gesture started at rest would keep running against geometry that has since moved, so anything in flight is abandoned when the preview comes on
-            if (IsPreviewing && !was) CancelGestures();
+            if (IsPreviewing && !was) { CommitFreeTransform(); CancelGestures(); }
 
             InvalidateVisual();
         }
@@ -944,6 +950,7 @@ public class GtCanvasControl : Control
         if (!props.IsLeftButtonPressed) return;
 
         var docPt = ToDocPoint(e.GetPosition(this));
+        if (_ft is not null && FtPressed(e, docPt)) return;
         var ctrl  = PlatformKeys.HasCommand(e.KeyModifiers);
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var alt   = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
@@ -1207,6 +1214,8 @@ public class GtCanvasControl : Control
                                        "none", 0, CdpModifiers(e.KeyModifiers));
         }
 
+        if (_ft is not null && !IsPreviewing && FtMoved(e, docPt)) return;
+
         if (_draggedGuide is not null)
         {
             UpdateGuideDrag(docPt, PlatformKeys.HasCommand(e.KeyModifiers));
@@ -1406,6 +1415,8 @@ public class GtCanvasControl : Control
             e.Handled = true;
             return;
         }
+
+        if (FtReleased(e)) return;
 
         if (_draggedGuide is not null && e.InitialPressMouseButton == MouseButton.Left)
         {
@@ -1873,14 +1884,9 @@ public class GtCanvasControl : Control
         return ResizeHandle.None;
     }
 
-    private static Cursor HandleCursor(ResizeHandle h) => h switch
-    {
-        ResizeHandle.N  or ResizeHandle.S  => new Cursor(StandardCursorType.SizeNorthSouth),
-        ResizeHandle.E  or ResizeHandle.W  => new Cursor(StandardCursorType.SizeWestEast),
-        ResizeHandle.NW or ResizeHandle.NE
-        or ResizeHandle.SW or ResizeHandle.SE => new Cursor(StandardCursorType.SizeAll),
-        _                                     => Cursor.Default
-    };
+    /// <summary>Photoshop's double-headed arrow pointing the way the handle pulls: sideways, up-down, or along the diagonal for a corner</summary>
+    private static Cursor HandleCursor(ResizeHandle h) =>
+        h == ResizeHandle.None ? Cursor.Default : ArrowCursor(HandleAngle(h));
 
     private void ApplyResizeDelta(Point docPt, bool constrainAspect = false, bool fromCenter = false)
     {
@@ -2983,6 +2989,7 @@ public class GtCanvasControl : Control
         foreach (var el in layer.Elements)
         {
             if (!_selectedElements.Contains(el)) continue;
+            if (_ft is not null && !IsPreviewing && ReferenceEquals(el, _ft.Element)) continue;
 
             var bounds = ElementAbsBounds(layer, el);
 
@@ -3001,6 +3008,13 @@ public class GtCanvasControl : Control
             }
 
             ctx.DrawRectangle(fill, pen, bounds);
+        }
+
+        // Free Transform draws its own turned box and handles in place of the ordinary ones
+        if (_ft is not null && !IsPreviewing)
+        {
+            RenderFreeTransform(ctx);
+            return;
         }
 
         // handles work against the model geometry, so they are hidden while it is overridden

@@ -207,6 +207,13 @@ images, UI aids, view state) stays in memory or preferences and is never written
   for release), refreshed on Option key down/up via top-level key handlers. `ClipBaseOf` = the mask object when it sits
   below in the same layer; such rows get the bent-arrow indent (`ClipArrowPath`) and their base an underline. Canvas `HitTest` skips a masked object where
   `IsDrawnAt` (renders it into a 3×3 bitmap around the point) finds no alpha
+- **Free Transform** (`GtCanvasControl.FreeTransform.cs`, Cmd/Ctrl+T → `MainWindow.DoFreeTransform`; timeline toggle is now
+  Cmd/Ctrl+Shift+T): one unlocked element. `_ft` session snapshots Location/Dimensions/RotateZ; handles hit-tested on the box
+  turned by `ScreenRz` about its centre; scale works in the turned frame (`FtScale`: corners proportional unless Shift, Alt =
+  from centre, new centre turned back out); outside the box rotates (Shift = 15°). Enter/double-click inside commits (one
+  `PropertyChangeAction`), Esc/Cmd+Z cancels; selection/tool/preview changes and other commands commit first
+  (`HandleFreeTransformKey`). `ArrowCursor(angle)`/`RotateCursor(angle)` are runtime-drawn Photoshop cursors cached per 10°;
+  `HandleCursor` uses them for the ordinary resize handles too
 - **Cut** (`MainWindow.DoCut` = `DoCopy` + `LayersPanel.DeleteElements`, refused if anything selected is locked): Cmd+X,
   Home › Clipboard `CutMenuItem`, and the row menu's Cut/Copy/Paste via `LayersPanel.CutRequested/CopyRequested/PasteRequested/CanPaste`.
   `DoPaste` keeps the original name when it is free (so a cut-paste comes back as itself), else `NextCopyName`

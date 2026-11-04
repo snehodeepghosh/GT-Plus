@@ -107,7 +107,7 @@
                             </Button>
                             <Button Content="✕" FontSize="11" Padding="7,2"
                                     VerticalAlignment="Center"
-                                    ToolTip.Tip="Close timeline (Ctrl+T)" Click="Close_Click" />
+                                    ToolTip.Tip="Close timeline (Ctrl+Shift+T)" Click="Close_Click" />
                     </StackPanel>
 
                     <WrapPanel x:Name="BarWrap" Orientation="Horizontal" ItemSpacing="18" LineSpacing="6">
