@@ -23,6 +23,13 @@ file itself, with no extra libraries.
 
 - **Names** are cleaned up GT's way: dots are removed, at most 15 characters are kept, and duplicates get a number.
 - **Point text** is placed on Photoshop's own baseline, so it lands where Photoshop drew it.
+- **Rotated and slanted text**: a type layer's transform is split into what GT can draw. The rotation becomes the
+  object's rotation (`<Transform Rotate>`), the slant becomes GT's Skew effect, and the scale goes into the font size.
+  Tested against Photoshop with 20° rotation, faux italic, and both together.
+- **Faux italic** becomes a 10° Skew effect, Photoshop's own slant, instead of the renderer's synthetic italic. See
+  [Fonts](fonts.md).
+- **Reference image**: Photoshop's flattened preview of the file is loaded as the [reference image](reference.md),
+  so you can lay it over the import to check it.
 - **Canvas size**: any size imports. The status bar warns when vMix wouldn't accept it (its sizes are 1920×1080,
   1280×720, 3840×2160, 3412×1920, 4096×2160, 7680×4320, 720×576, 768×576 and 720×480).
 

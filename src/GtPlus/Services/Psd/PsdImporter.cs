@@ -26,6 +26,9 @@ public sealed class PsdImportResult
     public SortedSet<string> MissingFonts { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> Warnings { get; } = new();
 
+    /// <summary>Photoshop's flattened preview of the document as a PNG, for the editor's reference overlay; never part of the title</summary>
+    public byte[]? ReferencePng { get; set; }
+
     /// <summary>true when the canvas is one of the sizes vMix's GT Title Designer accepts</summary>
     public bool StandardSize { get; set; } = true;
 }
@@ -65,6 +68,9 @@ public static class PsdImporter
         var result = new PsdImportResult { Document = doc, Assets = new GtAssetLibrary() };
         result.Warnings.AddRange(psd.Warnings);
         result.StandardSize = StandardSizes.Contains((psd.Width, psd.Height));
+
+        if (psd.Composite is { } composite && composite.Length == psd.Width * psd.Height * 4)
+            result.ReferencePng = PngEncoder.Encode(composite, psd.Width, psd.Height);
 
         var ctx = new Context(psd, result, SafeAssetName(documentName));
         var root = BuildTree(psd.Layers);
@@ -379,12 +385,14 @@ public static class PsdImporter
     /// <summary>a type layer as an editable text object</summary>
     private static GtElement MakeText(Context ctx, PsdLayer layer, PsdText t)
     {
-        // the text transform scales the stored size; a rotated or skewed layer keeps its vertical scale as the size
+        // the text transform (x' = xx*x + yx*y + tx, y' = xy*x + yy*y + ty) is split the way GT can draw it: a rotation (the
+        // object's RotateZ), a slant (GT's own Skew effect) and a scale (folded into the font size). Photoshop's faux italic
+        // is a 10° slant of its own, so it is added to the slant rather than left to the renderer's synthetic italic
         var m = t.Transform;
-        double scaleX = Math.Sqrt(m[0] * m[0] + m[1] * m[1]);
-        double scaleY = Math.Sqrt(m[2] * m[2] + m[3] * m[3]);
-        if (scaleX <= 0) scaleX = 1;
-        if (scaleY <= 0) scaleY = 1;
+        var xf = TextTransform.Decompose(m[0], m[1], m[2], m[3]);
+        double scaleX = xf.ScaleX, scaleY = xf.ScaleY;
+        double shear  = xf.Shear + (t.FauxItalic ? -TextTransform.FauxItalicShear * scaleX / scaleY : 0);
+        bool transformed = Math.Abs(xf.Rotation) > 1e-3 || Math.Abs(shear) > 1e-3;
 
         var font = FontMatcher.Resolve(t.FontPostScriptName);
         if (!font.Installed && !string.IsNullOrEmpty(font.Family)) ctx.Result.MissingFonts.Add(font.Family);
@@ -396,7 +404,7 @@ public static class PsdImporter
             FontFamily    = font.Family.Length > 0 ? font.Family : "Arial",
             FontSize      = Math.Round(t.FontSize * scaleY, 2),
             FontWeight    = t.FauxBold && font.Weight < FontWeight.Bold ? FontWeight.Bold : font.Weight,
-            FontStyle     = t.FauxItalic || font.Italic ? FontStyle.Italic : FontStyle.Normal,
+            FontStyle     = font.Italic ? FontStyle.Italic : FontStyle.Normal,
             Underline     = t.Underline,
             Strikethrough = t.Strikethrough,
             Uppercase     = t.FontCaps == 2,
@@ -423,18 +431,37 @@ public static class PsdImporter
         int lines = Math.Max(1, tb.Text.Split('\n').Length);
         double lineHeight = tb.LineSpacing > 2 ? tb.LineSpacing : ascent + descent;
 
+        // GT draws the object's own picture slanted (Skew, about the box centre) and then turns it (RotateZ, about the centre
+        // too): together the transform T = R·S, with the scale already in the font size
+        if (transformed)
+        {
+            tb.RotateZ = Math.Round(xf.Rotation, 6);
+            if (Math.Abs(shear) > 1e-3) GtSkew.Set(tb, Math.Round(Math.Atan(shear) * 180 / Math.PI, 3), 0);
+        }
+        (double X, double Y) T(double x, double y)
+        {
+            double cs = Math.Cos(xf.Rotation), sn = Math.Sin(xf.Rotation);
+            double sx = x + shear * y;
+            return (cs * sx - sn * y, sn * sx + cs * y);
+        }
+
         if (t.IsBox && t.BoxBounds is { } b)
         {
             // paragraph text: the box itself, mapped through the transform, and the text wraps inside it as in Photoshop
-            double left = m[4] + b[0] * scaleX, top = m[5] + b[1] * scaleY;
-            tb.Location   = new GtPoint(Math.Round(left, 2), Math.Round(top, 2));
-            tb.Dimensions = new GtSize(Math.Round((b[2] - b[0]) * scaleX, 2), Math.Round((b[3] - b[1]) * scaleY, 2));
+            double w = (b[2] - b[0]) * scaleX, h = (b[3] - b[1]) * scaleY;
+            tb.Dimensions = new GtSize(Math.Round(w, 2), Math.Round(h, 2));
             tb.AutoSize   = GtAutoSize.Fixed;
 
             // Photoshop sets a paragraph's first baseline one ascent below the top of its box; where this editor's layout
             // puts it differs by the line box's own padding, so the box moves by the difference and the text lands in place
-            if (Controls.GtCanvasControl.FirstLineGeometry(tb) is { } para)
-                tb.Location = new GtPoint(tb.Location.X, Math.Round(tb.Location.Y + ascent - para.Baseline, 2));
+            double dy = Controls.GtCanvasControl.FirstLineGeometry(tb) is { } para ? ascent - para.Baseline : 0;
+
+            // the box centre in the document is where the transform puts the centre of Photoshop's box; the baseline nudge is
+            // a move in the box's own (slanted, turned) frame
+            double pcx = (b[0] + b[2]) / 2, pcy = (b[1] + b[3]) / 2;
+            double cx = m[0] * pcx + m[2] * pcy + m[4], cy = m[1] * pcx + m[3] * pcy + m[5];
+            var nudge = T(0, dy);
+            tb.Location = new GtPoint(Math.Round(cx + nudge.X - w / 2, 2), Math.Round(cy + nudge.Y - h / 2, 2));
 
             ctx.Result.Texts++;
             return tb;
@@ -446,6 +473,17 @@ public static class PsdImporter
         tb.Dimensions = new GtSize(Math.Round(width, 2), Math.Round(ascent + descent + (lines - 1) * lineHeight, 2));
         tb.AutoSize   = tb.TextAlign == GtTextAlign.Center ? GtAutoSize.Fixed : GtAutoSize.Width;
         tb.NoWrap     = true;
+
+        // a turned or slanted layer's pixel bounds are wider than its text, so the width comes from laying the text out
+        if (transformed)
+        {
+            tb.Dimensions = new GtSize(100000, tb.Dimensions.Height);
+            if (Controls.GtCanvasControl.FirstLineGeometry(tb) is { } wide)
+            {
+                width = Math.Ceiling(wide.LineWidth) + 8;
+                tb.Dimensions = new GtSize(width, tb.Dimensions.Height);
+            }
+        }
 
         // ask the editor's own text layout where it puts the first line inside that box, then move the box so that line's
         // anchor sits on Photoshop's origin; font metrics alone would leave the text a few pixels off
@@ -471,7 +509,11 @@ public static class PsdImporter
             };
         }
 
-        tb.Location = new GtPoint(Math.Round(m[4] - anchorX, 2), Math.Round(m[5] - baseline, 2));
+        // the anchor has to land on Photoshop's origin after GT turns and slants the box about its centre:
+        // L = origin - size/2 - T(anchor - size/2), which is just origin - anchor when there is no transform
+        double hw = tb.Dimensions.Width / 2, hh = tb.Dimensions.Height / 2;
+        var off = T(anchorX - hw, baseline - hh);
+        tb.Location = new GtPoint(Math.Round(m[4] - hw - off.X, 2), Math.Round(m[5] - hh - off.Y, 2));
         ctx.Result.Texts++;
         return tb;
     }
@@ -529,6 +571,30 @@ public static class PsdImporter
             sb.Append(char.IsLetterOrDigit(c) || c is '-' or '_' ? c : '_');
         var s = sb.ToString().Trim('_');
         return s.Length == 0 ? "psd" : s;
+    }
+}
+
+/// <summary>splits a type layer's 2×2 transform into what GT can express: rotation, X slant and scale</summary>
+internal static class TextTransform
+{
+    /// <summary>Photoshop's faux italic slant, measured on its own render: tan 10°</summary>
+    public static readonly double FauxItalicShear = Math.Tan(10 * Math.PI / 180);
+
+    /// <summary>
+    /// QR split of [[xx, yx], [xy, yy]] (columns are where the text's x and y axes go) into R(rotation) · Shear · Scale:
+    /// <c>Shear</c> is the x += k·y slant (negative leans the top right, like italic), rotation is in radians, clockwise
+    /// on screen
+    /// </summary>
+    public static (double Rotation, double Shear, double ScaleX, double ScaleY) Decompose(double xx, double xy, double yx, double yy)
+    {
+        double sx = Math.Sqrt(xx * xx + xy * xy);
+        if (sx <= 1e-9) return (0, 0, 1, 1);
+        double rot = Math.Atan2(xy, xx);
+        double c = Math.Cos(rot), s = Math.Sin(rot);
+        double m  = yx * c + yy * s;        // part of the y axis along the turned x axis
+        double sy = -yx * s + yy * c;       // the rest, the true vertical scale
+        if (Math.Abs(sy) <= 1e-9) return (rot, 0, sx, sx);
+        return (rot, m / sy, sx, sy);
     }
 }
 

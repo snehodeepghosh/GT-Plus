@@ -438,9 +438,14 @@ public partial class LayersPanelControl : UserControl
             _                  => "?"
         };
 
+        bool clipped = ClipBaseOf(layer, element) is not null;
+        bool isBase  = layer.Elements.Any(e => !ReferenceEquals(e, element) && ReferenceEquals(ClipBaseOf(layer, e), element));
+
         nameBlock = new TextBlock
         {
             Text              = $"[{typeTag}] {(string.IsNullOrEmpty(element.Name) ? "(unnamed)" : element.Name)}",
+            // Photoshop's look: a clipped row is indented behind a bent arrow, its base's name is underlined
+            TextDecorations   = isBase ? TextDecorations.Underline : null,
             FontSize          = 11,
             Foreground        = new SolidColorBrush(Color.Parse("#aaaaaa")),
             VerticalAlignment = VerticalAlignment.Center,
@@ -451,6 +456,12 @@ public partial class LayersPanelControl : UserControl
         var inner = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         inner.Children.Add(visBtn);
         inner.Children.Add(lockBtn);
+        if (clipped)
+            inner.Children.Add(new TextBlock
+            {
+                Text = "↳", FontSize = 13, Margin = new Thickness(8, -2, 0, 0),
+                Foreground = new SolidColorBrush(Color.Parse("#9ccdf5")), VerticalAlignment = VerticalAlignment.Center,
+            });
         inner.Children.Add(nameBlock);
 
         var rowBorder = new Border
@@ -461,12 +472,27 @@ public partial class LayersPanelControl : UserControl
             Child      = inner,
         };
 
+        if (clipped) ToolTip.SetTip(rowBorder, $"Clipped to {ClipBaseOf(layer, element)!.Name} (Option-click to release)");
+
         rowBorder.PointerPressed += (_, e) =>
         {
             if (e.Source is Button or TextBox) return;
             if (_renameBox is not null) return;
             if (_canvas is null) return;
             if (!e.GetCurrentPoint(rowBorder).Properties.IsLeftButtonPressed) return;
+
+            // Photoshop's Option-click (Alt on Windows) between two rows clips the upper one to the one below; on the
+            // line at the top of this row that is the row above, anywhere else it is this row
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+            {
+                var target = element;
+                int index = layer.Elements.IndexOf(element);
+                if (e.GetPosition(rowBorder).Y <= 5 && index + 1 < layer.Elements.Count)
+                    target = layer.Elements[index + 1];   // rows are listed top first, so the row above is the next element up
+                ToggleClip(layer, target);
+                e.Handled = true;
+                return;
+            }
 
             var shift      = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
             var selected   = _canvas.SelectedElements;
@@ -820,11 +846,16 @@ public partial class LayersPanelControl : UserControl
         var dataDrivenColor = new MenuItem { Header = "Convert to Data Driven Color", IsVisible = false };
         dataDrivenColor.Click += (_, _) => ConvertToDataDrivenColorRequested?.Invoke(element);
 
+        var clip = new MenuItem { Header = "Create Clipping Mask" };
+        clip.Click += (_, _) => ToggleClip(layer, element);
+
         var menu = new ContextMenu();
         menu.Items.Add(rename);
         menu.Items.Add(new Separator());
         menu.Items.Add(duplicate);
         menu.Items.Add(delete);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(clip);
         menu.Items.Add(sequenceSeparator);
         menu.Items.Add(addSequence);
         menu.Items.Add(macroSeparator);
@@ -832,6 +863,10 @@ public partial class LayersPanelControl : UserControl
 
         menu.Opened += (_, _) =>
         {
+            bool isClipped = ClipBaseOf(layer, element) is not null;
+            clip.Header    = isClipped ? "Release Clipping Mask" : "Create Clipping Mask";
+            clip.IsEnabled = !element.Locked && !layer.Locked && (isClipped || ClipTargetFor(layer, element) is not null);
+
             int count  = _canvas?.SelectedElements.Count ?? 0;
             var suffix = count > 1 ? $" {count} Elements" : " Element";
 
@@ -855,6 +890,49 @@ public partial class LayersPanelControl : UserControl
         };
 
         return menu;
+    }
+
+    // ── clipping masks ──────────────────────────────────────────────────
+    // Photoshop's clipping mask expressed with GT's own mask: a clipped object's <Mask Object> names its base. Nothing new
+    // is written to the file; "clipped" is simply a mask whose object sits below the masked one in the same layer
+
+    /// <summary>the object <paramref name="element"/> is clipped to: its mask object, when that sits below it in the same layer</summary>
+    private static GtElement? ClipBaseOf(GtLayer layer, GtElement element)
+    {
+        if (string.IsNullOrEmpty(element.MaskObject)) return null;
+        int index = layer.Elements.IndexOf(element);
+        for (int i = index - 1; i >= 0; i--)
+            if (string.Equals(layer.Elements[i].Name, element.MaskObject, StringComparison.OrdinalIgnoreCase))
+                return layer.Elements[i];
+        return null;
+    }
+
+    /// <summary>what clipping <paramref name="element"/> would clip it to: the object right below it, or, when that one is itself clipped, the base it is clipped to - so a stack of clipped objects shares one base, as in Photoshop</summary>
+    private static GtElement? ClipTargetFor(GtLayer layer, GtElement element)
+    {
+        int index = layer.Elements.IndexOf(element);
+        if (index <= 0) return null;
+        var below = layer.Elements[index - 1];
+        var target = ClipBaseOf(layer, below) ?? below;
+        return string.IsNullOrEmpty(target.Name) ? null : target;
+    }
+
+    /// <summary>clips the object to the one below it, or releases it when it is clipped already; one undo step</summary>
+    public bool ToggleClip(GtLayer layer, GtElement element)
+    {
+        if (_doc is null || element.Locked || layer.Locked) return false;
+        var before = element.MaskObject;
+        string? after;
+        string verb;
+        if (ClipBaseOf(layer, element) is not null) { after = null; verb = "Release clipping mask"; }
+        else if (ClipTargetFor(layer, element) is { } target) { after = target.Name; verb = $"Clip to {target.Name}"; }
+        else return false;
+
+        var doc = _doc;
+        void Set(string? v) { element.MaskObject = v; AfterStructureChange(doc); _canvas?.SetSelection(element, false); }
+        Set(after);
+        History?.Push(new PropertyChangeAction($"{verb} ({element.Name})", undo: () => Set(before), redo: () => Set(after)));
+        return true;
     }
 
     /// <summary>frames behind the sequence an element draws, 1 for an ordinary still</summary>

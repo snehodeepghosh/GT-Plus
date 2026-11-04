@@ -4,6 +4,10 @@ The file format is explained in the GTZIP-Format.md file.
 
 Don't automatically commit to git
 
+**Golden rule:** no feature may change how a `.gtzip` is written or how vMix GT Title Designer reads it. Express new
+features with structures GT already has (masks, effects, ordinary element attributes); anything editor-only (reference
+images, UI aids, view state) stays in memory or preferences and is never written into the file.
+
 ---
 
 ## Project structure
@@ -165,5 +169,21 @@ Don't automatically commit to git
   non-ticker TextBlock mask uses its exact glyph outline (`BuildMaskGeometry`), which is also the fallback when a mask
   cannot be recorded (perspective rotation uses a custom draw op). A mask object with `Visible=false` masks nothing.
   Only rendering changed - the file still stores just `<Mask Object="Name" />`
+- **Clipping (Layers panel):** `LayersPanelControl.ToggleClip` sets/clears `MaskObject` to the object below
+  (`ClipTargetFor`: the one below, or its base when that is clipped itself); Option-click on a row, or within 5px of its
+  top edge for the row above, and the row context menu call it. `ClipBaseOf` = the mask object when it sits below in the
+  same layer; such rows get the ↳ indent and their base an underline. Canvas `HitTest` skips a masked object where
+  `IsDrawnAt` (renders it into a 3×3 bitmap around the point) finds no alpha
+- **Reference image:** `GtCanvasControl.ReferenceImage/Visible/Opacity/Difference`, drawn by `RenderReference` above the
+  layers and skipped in `_exportMode`; MainWindow's View › Reference group drives it (`SetReference`). After a PSD import
+  it is `PsdImportResult.ReferencePng`, from `PsdFile.Composite` (the image data section, read by
+  `PsdReader.ReadComposite`). Never written to the file
+- **Fonts:** `ReplaceFontsWindow` (Home › Fonts) groups text by (family, weight, style) and rewrites those three
+  attributes, one undo step. The Font group's faux italic button sets Skew X = `FauxItalicAngle` (−10°, Photoshop's
+  measured slant) with `CenterOffset` on the first baseline
+- **PSD text transforms:** `TextTransform.Decompose` QR-splits the 2×2 into rotation (→ `RotateZ`), X shear (→ Skew) and
+  scale (→ font size); faux italic adds −tan10°·sx/sy to the shear. The box is placed so `L = O − size/2 − T(a − size/2)`
+  with T = R·S about the centre. The canvas applies a Replace-stage reshape *before* Z rotation, as GT does
+  (`RenderElementBodySkewed` conjugates it by the rotation)
 - **Canvas background:** View tab › Background switches `CanvasBackground` between Grid and Solid (Black also resets `CanvasSolidColor` to black); Preferences edits the colours and grid size.
 - **No XAML bindings for file menu** - built entirely in `RebuildFileMenu()` C# code because recent files are dynamic.

@@ -1542,6 +1542,7 @@ public partial class MainWindow : Window
 
         GtCanvas.SetAssets(_currentAssets);
         GtCanvas.Document = document;
+        SetReference(result.ReferencePng, "the PSD's preview");
         LayersPanel.Populate(document);
         DeleteLayerMenuItem.IsEnabled = document.Layers.Count > 1;
         PropertiesPanel.Populate(Array.Empty<GtElement>());
@@ -1583,6 +1584,7 @@ public partial class MainWindow : Window
 
             GtCanvas.SetAssets(assets);
             GtCanvas.Document = document;
+            SetReference(null, null);
 
             LayersPanel.Populate(document);
             DeleteLayerMenuItem.IsEnabled = document.Layers.Count > 1;
@@ -1990,6 +1992,7 @@ public partial class MainWindow : Window
 
         GtCanvas.SetAssets(_currentAssets);
         GtCanvas.Document = doc;
+        SetReference(null, null);
         LayersPanel.Populate(doc);
         DeleteLayerMenuItem.IsEnabled = doc.Layers.Count > 1;
         PropertiesPanel.Populate(Array.Empty<GtElement>());
@@ -2431,6 +2434,114 @@ public partial class MainWindow : Window
             redo: Apply));
 
         StatusText.Text = $"Added {rectName} masked by {nameAfter}";
+    }
+
+    // ── reference image (View › Reference) ───────────────────────────────
+    // editor-only: held by the canvas, never written to the .gtzip and never drawn into an export
+
+    private string? _referenceSource;
+
+    /// <summary>sets the reference from encoded image bytes (null clears it); the show toggle keeps its state, so a fresh import is ready to check with one click</summary>
+    private void SetReference(byte[]? image, string? source)
+    {
+        Avalonia.Media.Imaging.Bitmap? bmp = null;
+        if (image is not null)
+        {
+            try { using var ms = new MemoryStream(image); bmp = new Avalonia.Media.Imaging.Bitmap(ms); }
+            catch (Exception ex) { Logger.Warn($"reference image could not be decoded: {ex.Message}"); }
+        }
+        GtCanvas.ReferenceImage = bmp;
+        _referenceSource = bmp is null ? null : source;
+        if (bmp is null) GtCanvas.ReferenceVisible = false;
+        SyncReferenceControls();
+    }
+
+    private void SyncReferenceControls()
+    {
+        bool has = GtCanvas.ReferenceImage is not null;
+        ReferenceShowButton.IsEnabled       = has;
+        ReferenceDifferenceButton.IsEnabled = has;
+        ReferenceOpacitySlider.IsEnabled    = has && !GtCanvas.ReferenceDifference;
+        ReferenceClearButton.IsEnabled      = has;
+        ReferenceShowButton.IsChecked       = has && GtCanvas.ReferenceVisible;
+        ReferenceDifferenceButton.IsChecked = GtCanvas.ReferenceDifference;
+        ToolTip.SetTip(ReferenceShowButton, has
+            ? $"Show the reference ({_referenceSource}) over the title. Never saved into the title"
+            : "No reference yet: import a PSD, or use Load image...");
+    }
+
+    private void ReferenceShow_Click(object? sender, RoutedEventArgs e)
+    {
+        GtCanvas.ReferenceVisible = ReferenceShowButton.IsChecked == true;
+        SyncReferenceControls();
+    }
+
+    private void ReferenceDifference_Click(object? sender, RoutedEventArgs e)
+    {
+        GtCanvas.ReferenceDifference = ReferenceDifferenceButton.IsChecked == true;
+        if (GtCanvas.ReferenceDifference) GtCanvas.ReferenceVisible = true;
+        SyncReferenceControls();
+    }
+
+    private void ReferenceOpacity_Changed(object? sender, Avalonia.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+    {
+        if (GtCanvas is null) return;
+        GtCanvas.ReferenceOpacity = e.NewValue / 100.0;
+    }
+
+    private void ReferenceClear_Click(object? sender, RoutedEventArgs e) => SetReference(null, null);
+
+    private async void ReferenceLoad_Click(object? sender, RoutedEventArgs e)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Load Reference Image",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("Images") { Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp", "*.gif" } },
+                new FilePickerFileType("All Files") { Patterns = new[] { "*.*" } },
+            },
+        });
+        var path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        if (path is null) return;
+        try
+        {
+            SetReference(await File.ReadAllBytesAsync(path), Path.GetFileName(path));
+            if (GtCanvas.ReferenceImage is null) { StatusText.Text = $"Could not read {Path.GetFileName(path)} as an image"; return; }
+            GtCanvas.ReferenceVisible = true;
+            SyncReferenceControls();
+            StatusText.Text = $"Reference: {Path.GetFileName(path)} (stretched to the canvas, not saved into the title)";
+        }
+        catch (Exception ex) { StatusText.Text = $"Could not load the reference: {ex.Message}"; }
+    }
+
+    /// <summary>Home › Fonts › Replace fonts: swaps fonts in bulk, as one undo step; only the family, weight and style attributes every text object already has are touched</summary>
+    private async void ReplaceFonts_Click(object? sender, RoutedEventArgs e)
+    {
+        var doc = GtCanvas.Document;
+        if (doc is null) return;
+
+        var all = doc.Layers.SelectMany(l => l.Elements).OfType<GtTextBlock>().ToList();
+        var selected = GtCanvas.SelectedElements.OfType<GtTextBlock>().ToList();
+        var dialog = new ReplaceFontsWindow(all, selected);
+        await dialog.ShowDialog(this);
+        if (dialog.Result is not { } result || result.Replacements.Count == 0) return;
+
+        var changed = ReplaceFontsWindow.Apply(result.Targets, result.Replacements);
+        if (changed.Count == 0) return;
+
+        void Refresh()
+        {
+            PropertiesPanel.Populate(GtCanvas.SelectedElements.ToList());
+            GtCanvas.InvalidateVisual();
+        }
+        Refresh();
+        _history.Push(new PropertyChangeAction(
+            $"Replace fonts ({changed.Count} object{(changed.Count == 1 ? "" : "s")})",
+            undo: () => { foreach (var c in changed) ReplaceFontsWindow.Set(c.Text, c.Before); Refresh(); },
+            redo: () => { foreach (var c in changed) ReplaceFontsWindow.Set(c.Text, c.After); Refresh(); }));
+        StatusText.Text = $"Replaced fonts on {changed.Count} text object{(changed.Count == 1 ? "" : "s")}";
     }
 
     private void ReplaceWithText_Click(object? sender, RoutedEventArgs e)

@@ -385,6 +385,7 @@ public partial class PropertiesPanelControl : UserControl
                 FontSizeBox.Value = (decimal)tb.FontSize;
 
                 ItalicButton.IsChecked    = tb.FontStyle == FontStyle.Italic;
+                FauxItalicButton.IsChecked = IsFauxItalic(tb);
                 UnderlineButton.IsChecked = tb.Underline;
                 StrikeButton.IsChecked    = tb.Strikethrough;
                 UppercaseButton.IsChecked = tb.Uppercase;
@@ -988,6 +989,35 @@ public partial class PropertiesPanelControl : UserControl
             PushHistory("Italic",
                 () => { for (int i = 0; i < texts.Count; i++) texts[i].FontStyle = befores[i]; },
                 () => { foreach (var t in texts) t.FontStyle = after; });
+        Apply();
+    }
+
+    /// <summary>Photoshop's faux italic slant; GT's skew X is positive when the bottom goes right, so an italic lean is negative</summary>
+    public const double FauxItalicAngle = -10;
+
+    private static bool IsFauxItalic(GtTextBlock tb) => GtSkew.Get(tb) is var (x, y) && Math.Abs(x - FauxItalicAngle) < 0.01 && y == 0;
+
+    /// <summary>
+    /// Photoshop-style faux italic: instead of the renderer's synthetic italic (which differs between this editor, DirectWrite
+    /// in vMix and Photoshop) the text gets GT's own Skew effect at Photoshop's 10°, pivoting on the first baseline so the line
+    /// stays where it is. Toggling off removes the skew
+    /// </summary>
+    private void FauxItalicButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (_updating || CurrentText is null) return;
+        bool on     = FauxItalicButton.IsChecked == true;
+        var texts   = AllTexts;
+        var befores = texts.Select(t => GtEffect.CloneList(t.Effects)).ToList();
+        foreach (var t in texts)
+        {
+            GtSkew.Set(t, on ? FauxItalicAngle : 0, 0);
+            if (on && GtSkew.First(t.Effects) is { } skew && Controls.GtCanvasControl.FirstLineGeometry(t) is { } line)
+                skew.CenterOffset = new GtPoint(0, Math.Round(line.Baseline - t.Dimensions.Height / 2, 2));
+        }
+        var afters = texts.Select(t => GtEffect.CloneList(t.Effects)).ToList();
+        PushHistory(on ? "Faux italic" : "Remove faux italic",
+            () => { for (int i = 0; i < texts.Count; i++) texts[i].Effects = GtEffect.CloneList(befores[i]); },
+            () => { for (int i = 0; i < texts.Count; i++) texts[i].Effects = GtEffect.CloneList(afters[i]); });
         Apply();
     }
 

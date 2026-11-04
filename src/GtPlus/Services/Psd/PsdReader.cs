@@ -98,6 +98,9 @@ public sealed class PsdFile
 
     public List<PsdLayer> Layers { get; } = new();
 
+    /// <summary>Photoshop's own flattened picture of the whole document (the "maximize compatibility" composite), straight RGBA at the canvas size; null when the file does not carry one</summary>
+    public byte[]? Composite { get; set; }
+
     /// <summary>layers whose pixels could not be decoded (an unsupported compression, a truncated file); reported rather than fatal</summary>
     public List<string> Warnings { get; } = new();
 }
@@ -131,7 +134,6 @@ public static class PsdReader
         psd.Width     = (int)r.ReadUInt32();
         psd.Depth     = r.ReadUInt16();
         psd.ColorMode = r.ReadUInt16();
-        _ = channels;
 
         if (psd.Depth is not (8 or 16 or 32))
             throw new InvalidDataException($"{psd.Depth}-bit documents are not supported; save the PSD as 8, 16 or 32 bits per channel.");
@@ -143,6 +145,9 @@ public static class PsdReader
 
         ReadImageResources(r, psd);
         ReadLayerAndMaskInfo(r, psd);
+
+        try { ReadComposite(r, psd, channels); }
+        catch (Exception ex) { psd.Warnings.Add($"Could not read the flattened preview: {ex.Message}"); psd.Composite = null; }
         return psd;
     }
 
@@ -469,6 +474,83 @@ public static class PsdReader
         }
 
         layer.Pixels = rgba;
+    }
+
+    /// <summary>
+    /// the image data section at the end of the file: every channel of the flattened document, under one compression
+    /// header (with all the RLE row counts first). A file saved without "maximize compatibility" holds a blank one
+    /// </summary>
+    private static void ReadComposite(BigEndianReader r, PsdFile psd, int channels)
+    {
+        int w = psd.Width, h = psd.Height, bps = psd.Depth / 8;
+        if (w <= 0 || h <= 0 || channels <= 0 || r.Position + 2 > r.Length) return;
+        int compression = r.ReadUInt16();
+        int rowBytes = w * bps;
+        var planes = new byte[channels][];
+
+        if (compression == 0)
+        {
+            for (int c = 0; c < channels; c++) planes[c] = To8Bit(r.ReadBytes((long)rowBytes * h), w, h, bps);
+        }
+        else if (compression == 1)
+        {
+            var counts = new int[channels * h];
+            for (int i = 0; i < counts.Length; i++) counts[i] = psd.IsPsb ? (int)r.ReadUInt32() : r.ReadUInt16();
+            for (int c = 0; c < channels; c++)
+            {
+                var raw = new byte[rowBytes * h];
+                for (int y = 0; y < h; y++) UnpackBits(r.ReadBytes(counts[c * h + y]), raw, y * rowBytes, rowBytes);
+                planes[c] = To8Bit(raw, w, h, bps);
+            }
+        }
+        else return;   // ZIP composites are not written by Photoshop
+
+        int colour = psd.ColorMode switch { 1 => 1, 4 => 4, _ => 3 };
+        byte[]? alpha = channels > colour ? planes[colour] : null;
+        var rgba = new byte[w * h * 4];
+        for (int i = 0, p = 0; i < w * h; i++, p += 4)
+        {
+            byte rr, gg, bb;
+            if (colour == 1) rr = gg = bb = planes[0][i];
+            else if (colour == 4)
+            {
+                double cc = 1 - planes[0][i] / 255.0, m = 1 - planes[1][i] / 255.0, y = 1 - planes[2][i] / 255.0, k = 1 - planes[3][i] / 255.0;
+                rr = (byte)Math.Round(255 * (1 - cc) * (1 - k)); gg = (byte)Math.Round(255 * (1 - m) * (1 - k)); bb = (byte)Math.Round(255 * (1 - y) * (1 - k));
+            }
+            else { rr = planes[0][i]; gg = planes[1][i]; bb = planes[2][i]; }
+
+            byte a = alpha?[i] ?? 255;
+            // the merged picture of a document without a background is stored matted against white; take the white back out
+            if (alpha is not null && a > 0 && a < 255)
+            {
+                rr = Unmatte(rr, a); gg = Unmatte(gg, a); bb = Unmatte(bb, a);
+            }
+            rgba[p] = rr; rgba[p + 1] = gg; rgba[p + 2] = bb; rgba[p + 3] = a;
+        }
+        psd.Composite = rgba;
+    }
+
+    private static byte Unmatte(byte c, byte a)
+    {
+        double af = a / 255.0;
+        return (byte)Math.Clamp(Math.Round((c / 255.0 - (1 - af)) / af * 255), 0, 255);
+    }
+
+    private static byte[] To8Bit(byte[] raw, int w, int h, int bytesPerSample)
+    {
+        if (bytesPerSample == 1) return raw;
+        var plane = new byte[w * h];
+        if (bytesPerSample == 2)
+            for (int i = 0; i < plane.Length; i++) plane[i] = raw[i * 2];
+        else
+            for (int i = 0; i < plane.Length; i++)
+            {
+                float f = BitConverter.ToSingle(new[] { raw[i * 4 + 3], raw[i * 4 + 2], raw[i * 4 + 1], raw[i * 4] }, 0);
+                double v = Math.Clamp(f, 0f, 1f);
+                v = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.Pow(v, 1 / 2.4) - 0.055;
+                plane[i] = (byte)Math.Round(v * 255);
+            }
+        return plane;
     }
 
     /// <summary>one channel plane reduced to 8 bits per sample</summary>

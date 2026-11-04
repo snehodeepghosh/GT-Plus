@@ -14,6 +14,11 @@ On top of GT Plus it adds:
 - Photoshop import (File › Import PSD, or drop a `.psd`/`.psb` on the canvas): groups become layers, text stays
   editable, and Photoshop clipping masks become GT masks
 - masks drawn the way GT's engine draws them: the mask object's own pixels cut the masked object, not its bounding box
+- Photoshop-style clipping in the Layers panel (Option-click between rows, or right-click › Create Clipping Mask),
+  and clipped objects that can only be clicked where they show
+- bulk font replacement, and Photoshop-style faux italic saved as GT's own Skew effect
+- a reference image overlay (the PSD's own preview after an import) with opacity and difference modes, never saved
+- PSD text rotation and slant imported as GT rotation and Skew
 - Skew, Reflection and Texture Flip effects
 - a Figma-style timeline that can be detached onto another monitor, with the working area highlighted
 - drag-to-move on the canvas, a grid or black canvas background, and Cmd/Option shortcuts on macOS

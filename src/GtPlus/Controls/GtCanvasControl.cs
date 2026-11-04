@@ -333,6 +333,44 @@ public class GtCanvasControl : Control
         set => SetValue(ZoomProperty, value);
     }
 
+    // ── reference image ─────────────────────────────────────────────────
+    // a picture of the original design laid over the title to check the build against it: the PSD's own flattened preview
+    // after an import, or any image the user loads. Editor-only: never drawn into an export and never written to the file
+
+    private Bitmap? _referenceImage;
+    private bool    _referenceVisible;
+    private double  _referenceOpacity = 0.5;
+    private bool    _referenceDifference;
+
+    public Bitmap? ReferenceImage
+    {
+        get => _referenceImage;
+        set { if (!ReferenceEquals(_referenceImage, value)) { _referenceImage?.Dispose(); _referenceImage = value; InvalidateVisual(); } }
+    }
+
+    public bool ReferenceVisible { get => _referenceVisible; set { _referenceVisible = value; InvalidateVisual(); } }
+
+    /// <summary>0-1</summary>
+    public double ReferenceOpacity { get => _referenceOpacity; set { _referenceOpacity = Math.Clamp(value, 0, 1); InvalidateVisual(); } }
+
+    /// <summary>draw the reference in difference mode: where the title matches it the canvas goes black, so any mismatch lights up</summary>
+    public bool ReferenceDifference { get => _referenceDifference; set { _referenceDifference = value; InvalidateVisual(); } }
+
+    private void RenderReference(DrawingContext ctx, Rect docBounds)
+    {
+        if (_exportMode || !_referenceVisible || _referenceImage is not { } img || _referenceOpacity <= 0) return;
+        var src = new Rect(0, 0, img.PixelSize.Width, img.PixelSize.Height);
+        using (ctx.PushRenderOptions(new RenderOptions
+               {
+                   BitmapBlendingMode    = _referenceDifference ? BitmapBlendingMode.Difference : BitmapBlendingMode.SourceOver,
+                   BitmapInterpolationMode = Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality,
+               }))
+        // an opacity push would draw the picture into a layer of its own, where a difference has nothing to blend against,
+        // so difference mode is always at full strength
+        using (_referenceDifference ? (IDisposable?)null : ctx.PushOpacity(_referenceOpacity))
+            ctx.DrawImage(img, src, docBounds);
+    }
+
     public static readonly StyledProperty<double> OutsideCanvasOpacityProperty =
         AvaloniaProperty.Register<GtCanvasControl, double>(nameof(OutsideCanvasOpacity), 0.30);
 
@@ -1515,11 +1553,52 @@ public class GtCanvasControl : Control
                 var el = elements[ei];
                 if (!el.Visible) continue;
                 var bounds = ElementAbsBounds(layer, el);
-                if (bounds.Contains(docPoint))
-                    return (layer, el);
+                if (!bounds.Contains(docPoint)) continue;
+                // a masked (clipped) object can only be picked where it actually shows, so a click on the part its mask cuts
+                // away falls through to whatever is underneath
+                if (!string.IsNullOrEmpty(el.MaskObject) && !IsDrawnAt(layer, el, docPoint)) continue;
+                return (layer, el);
             }
         }
         return (null, null);
+    }
+
+    /// <summary>
+    /// true when <paramref name="el"/> puts any visible pixel within a pixel of <paramref name="docPoint"/>: the object is
+    /// drawn exactly as the canvas draws it - mask, crop, effects and all - into a tiny bitmap around the point and its
+    /// alpha is read back
+    /// </summary>
+    private bool IsDrawnAt(GtLayer layer, GtElement el, Point docPoint)
+    {
+        const int size = 3;
+        try
+        {
+            var nameMap = new Dictionary<string, GtElement>(StringComparer.OrdinalIgnoreCase);
+            foreach (var e in layer.Elements)
+                if (!string.IsNullOrEmpty(e.Name)) nameMap[e.Name] = e;
+
+            using var rtb = new RenderTargetBitmap(new PixelSize(size, size), new Vector(96, 96));
+            using (var ctx = rtb.CreateDrawingContext())
+            using (ctx.PushTransform(Matrix.CreateTranslation(layer.Location.X - docPoint.X + size / 2.0,
+                                                              layer.Location.Y - docPoint.Y + size / 2.0)))
+            {
+                var localCanvas = new Rect(-layer.Location.X, -layer.Location.Y, _document?.Width ?? 0, _document?.Height ?? 0);
+                RenderElement(ctx, el, localCanvas, null, nameMap);
+            }
+
+            var px = new byte[size * size * 4];
+            var handle = GCHandle.Alloc(px, GCHandleType.Pinned);
+            try { rtb.CopyPixels(new PixelRect(0, 0, size, size), handle.AddrOfPinnedObject(), px.Length, size * 4); }
+            finally { handle.Free(); }
+            for (int i = 3; i < px.Length; i += 4)
+                if (px[i] > 8) return true;
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"pixel hit test failed for '{el.Name}': {ex.Message}");
+            return true;   // never make an object unclickable because the test itself failed
+        }
     }
 
     /// <summary>rect intersection test, skips locked layers/elements (drag-box rule)</summary>
@@ -1850,6 +1929,8 @@ public class GtCanvasControl : Control
                 if (!layer.Visible) continue;
                 RenderLayer(ctx, layer, docBounds);
             }
+
+            RenderReference(ctx, docBounds);
 
             // guides sit above the artwork but below the selection chrome
             RenderGuides(ctx, doc);
@@ -2414,6 +2495,20 @@ public class GtCanvasControl : Control
     {
         var bounds  = AnimatedBounds(element, anim);
         var reshape = GtReplaceEffects.Matrix(element.Effects, bounds);
+
+        // GT reshapes the object's own picture (Replace stage) and then turns the result with its Transform, so a skew is
+        // applied before the Z rotation. The body below pushes the rotation innermost, so the reshape pushed outside it is
+        // conjugated by that rotation: R⁻¹·S·R outside R gives S then R
+        if (!reshape.IsIdentity)
+        {
+            var (rx, ry, rz) = AnimatedRotation(element, anim);
+            if (rz != 0 && rx == 0 && ry == 0)
+            {
+                var c   = bounds.Center;
+                var rot = Matrix.CreateTranslation(-c.X, -c.Y) * Matrix.CreateRotation(rz) * Matrix.CreateTranslation(c.X, c.Y);
+                if (rot.TryInvert(out var inv)) reshape = inv * reshape * rot;
+            }
+        }
 
         // the Finish stage composites the reflection behind the finished object, so it is drawn first
         if (GtReflection.First(element.Effects) is { Depth: > 0 } reflection)
