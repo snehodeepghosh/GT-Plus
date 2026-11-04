@@ -400,7 +400,7 @@ public partial class LayersPanelControl : UserControl
                                               el.Location.Y + from.Location.Y - layer.Location.Y);
                     arrived.Add(el);
                 }
-            if (arrived.Count > 0) GrowFrameToCover(layer, arrived, elems);
+            if (arrived.Count > 0) GrowFrameToCover(layer, arrived, elems, _doc.Width, _doc.Height);
         }
 
         // visual order is top-to-bottom, model/render order is bottom-to-top
@@ -419,32 +419,42 @@ public partial class LayersPanelControl : UserControl
     /// <summary>
     /// a layer's frame cuts off what lies outside it, so when objects are dropped into a layer the frame grows (never shrinks)
     /// to cover their boxes; the layer's other objects shift by the opposite amount, so nothing moves on screen. A frame whose
-    /// inner composition is sized differently keeps that ratio
+    /// inner composition is sized differently keeps that ratio.
+    /// The growth stops at the canvas edge: vMix draws a layer's contents through a viewport the size of the canvas, measured
+    /// from the layer's own top-left (GraphicsCompositionLayer sets ViewPortSize = parent size), so a frame that starts left of
+    /// or above the canvas, or runs past it, pushes its objects outside what vMix draws and they vanish in GT and vMix
     /// </summary>
-    private static void GrowFrameToCover(GtLayer layer, IReadOnlyList<GtElement> arrived, IReadOnlyList<GtElement> all)
+    private static void GrowFrameToCover(GtLayer layer, IReadOnlyList<GtElement> arrived, IReadOnlyList<GtElement> all,
+                                         double canvasW, double canvasH)
     {
         double w = layer.Dimensions.Width, h = layer.Dimensions.Height;
         if (w <= 0 || h <= 0) return;   // a frameless layer (files in the wild) shows everything already
 
-        double x0 = 0, y0 = 0, x1 = w, y1 = h;
+        // everything in canvas (absolute) coordinates
+        double lx = layer.Location.X, ly = layer.Location.Y;
+        double x0 = lx, y0 = ly, x1 = lx + w, y1 = ly + h;
         foreach (var el in arrived)
         {
-            x0 = Math.Min(x0, el.Location.X);
-            y0 = Math.Min(y0, el.Location.Y);
-            x1 = Math.Max(x1, el.Location.X + el.Dimensions.Width);
-            y1 = Math.Max(y1, el.Location.Y + el.Dimensions.Height);
+            // only the part of the object that is on the canvas needs covering; the rest never shows in vMix
+            double bx0 = Math.Max(0, lx + el.Location.X), by0 = Math.Max(0, ly + el.Location.Y);
+            double bx1 = Math.Min(canvasW, lx + el.Location.X + el.Dimensions.Width);
+            double by1 = Math.Min(canvasH, ly + el.Location.Y + el.Dimensions.Height);
+            if (bx1 <= bx0 || by1 <= by0) continue;
+            x0 = Math.Min(x0, bx0); y0 = Math.Min(y0, by0);
+            x1 = Math.Max(x1, bx1); y1 = Math.Max(y1, by1);
         }
         x0 = Math.Floor(x0); y0 = Math.Floor(y0); x1 = Math.Ceiling(x1); y1 = Math.Ceiling(y1);
-        if (x0 >= 0 && y0 >= 0 && x1 <= w && y1 <= h) return;
+        if (x0 >= lx && y0 >= ly && x1 <= lx + w && y1 <= ly + h) return;
 
+        double dx = x0 - lx, dy = y0 - ly;
         double sx = layer.InnerWidth  > 0 ? layer.InnerWidth  / w : 1;
         double sy = layer.InnerHeight > 0 ? layer.InnerHeight / h : 1;
-        layer.Location    = new GtPoint(layer.Location.X + x0, layer.Location.Y + y0);
+        layer.Location    = new GtPoint(x0, y0);
         layer.Dimensions  = new GtSize(x1 - x0, y1 - y0);
         layer.InnerWidth  = Math.Round((x1 - x0) * sx, 3);
         layer.InnerHeight = Math.Round((y1 - y0) * sy, 3);
         foreach (var el in all)
-            el.Location = new GtPoint(el.Location.X - x0, el.Location.Y - y0);
+            el.Location = new GtPoint(el.Location.X - dx, el.Location.Y - dy);
     }
 
     private Border BuildLayerHeader(GtLayer layer, out TextBlock nameBlock)

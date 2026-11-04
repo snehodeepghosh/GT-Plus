@@ -2269,7 +2269,10 @@ public partial class GtCanvasControl : Control
 
             // the layer frame is a mask: whatever hangs outside it is not part of the picture; the one exception is the selected layer, where the overflow shows through at the preference's opacity so it can still be seen and grabbed while editing
             var lb = LayerBounds(layer);
-            var layerRect = new Rect(0, 0, lb.Width, lb.Height);
+            // vMix composes a layer through a viewport the size of the canvas, taken from the layer's own top-left
+            // (GraphicsCompositionLayer: ViewPortSize = parent size), so nothing past canvas width/height in the layer's own
+            // coordinates is drawn, however big the frame is
+            var layerRect = new Rect(0, 0, Math.Min(lb.Width, docBounds.Width), Math.Min(lb.Height, docBounds.Height));
 
             bool showOverflow = !_exportMode && OutsideLayerOpacity > 0 &&
                                 (ReferenceEquals(layer, _selectedLayer) || HasSelectedElement(layer));

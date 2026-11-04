@@ -1684,7 +1684,8 @@ public partial class MainWindow : Window
             var filename = Path.GetFileName(path);
             var storyboards = document.Storyboards.Count > 0
                 ? $"  ·  {document.Storyboards.Count} storyboard(s)" : "";
-            StatusText.Text = $"{filename}  ·  {document.Layers.Count} layers  ·  {document.Width}×{document.Height}{storyboards}";
+            StatusText.Text = $"{filename}  ·  {document.Layers.Count} layers  ·  {document.Width}×{document.Height}{storyboards}"
+                            + ViewportWarning(document);
             Title = $"{AppName}  -  {filename}";
 
             _recent.Add(path);
@@ -1970,6 +1971,7 @@ public partial class MainWindow : Window
             StatusText.Text = webCount == 0
                 ? $"Saved  ·  {Path.GetFileName(path)}"
                 : $"Saved  ·  {Path.GetFileName(path)}  ·  {webCount} web page{(webCount == 1 ? "" : "s")} stored for {AppName} only";
+            StatusText.Text += ViewportWarning(doc);
             return true;
         }
         catch (Exception ex)
@@ -2622,6 +2624,30 @@ public partial class MainWindow : Window
     /// holds what its contents draw, and its contents move by the opposite amount so nothing moves on screen. Only the
     /// layer's own Location/Dimensions/InnerWidth/InnerHeight and its objects' Locations change, all ordinary GT values
     /// </summary>
+    /// <summary>
+    /// layers holding objects that vMix will not draw: it composes a layer through a canvas-sized viewport from the layer's
+    /// own top-left, so anything past the canvas width/height in layer coordinates is lost (a frame grown off the canvas does
+    /// this). Empty when every layer is fine, else a status-bar note naming them and the fix
+    /// </summary>
+    private static string ViewportWarning(GtDocument doc)
+    {
+        var bad = new List<string>();
+        foreach (var layer in doc.Layers)
+        {
+            if (layer.Dimensions.Width <= 0 || layer.Dimensions.Height <= 0) continue;
+            // the frame cropping its objects is ordinary GT behaviour; only the canvas-sized viewport loses things unexpectedly
+            double vw = doc.Width, vh = doc.Height;
+            bool cut = layer.Elements.Any(el => el.Visible &&
+                (el.Location.X + el.Dimensions.Width > vw + 0.5 || el.Location.Y + el.Dimensions.Height > vh + 0.5) &&
+                // only objects that would show on the canvas matter
+                layer.Location.X + el.Location.X < doc.Width && layer.Location.Y + el.Location.Y < doc.Height &&
+                layer.Location.X + el.Location.X + el.Dimensions.Width > 0 && layer.Location.Y + el.Location.Y + el.Dimensions.Height > 0);
+            if (cut) bad.Add($"\"{layer.Name}\"");
+        }
+        return bad.Count == 0 ? "" :
+            $"  ·  ⚠ vMix won't draw part of layer {string.Join(", ", bad)}: its frame runs off the canvas. Select it and use Format › Layer › Fit to visible";
+    }
+
     private void FitLayerToVisible()
     {
         var doc = GtCanvas.Document;
@@ -2643,8 +2669,10 @@ public partial class MainWindow : Window
             if (GtCanvas.VisibleContentBounds(layer) is not { } box) { skipped.Add($"{layer.Name} (draws nothing)"); continue; }
 
             // whole pixels, never cutting into the content
-            double x0 = Math.Floor(box.X), y0 = Math.Floor(box.Y);
-            double x1 = Math.Ceiling(box.Right), y1 = Math.Ceiling(box.Bottom);
+            // and never past the canvas: vMix only draws a canvas-sized window of a layer, from the layer's top-left
+            double x0 = Math.Max(0, Math.Floor(box.X)), y0 = Math.Max(0, Math.Floor(box.Y));
+            double x1 = Math.Min(doc.Width, Math.Ceiling(box.Right)), y1 = Math.Min(doc.Height, Math.Ceiling(box.Bottom));
+            if (x1 <= x0 || y1 <= y0) { skipped.Add($"{layer.Name} (nothing on the canvas)"); continue; }
             var newLoc = new GtPoint(x0, y0);
             var newDim = new GtSize(x1 - x0, y1 - y0);
             double dx = x0 - layer.Location.X, dy = y0 - layer.Location.Y;

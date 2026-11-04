@@ -240,6 +240,11 @@ images, UI aids, view state) stays in memory or preferences and is never written
   scale (→ font size); faux italic adds −tan10°·sx/sy to the shear. The box is placed so `L = O − size/2 − T(a − size/2)`
   with T = R·S about the centre. The canvas applies a Replace-stage reshape *before* Z rotation, as GT does
   (`RenderElementBodySkewed` conjugates it by the rotation)
+- **Layer viewport (vMix):** `GraphicsCompositionLayer.UpdateRenderTarget` sets `ViewPortSize = m_Parent.Size`, so a layer's
+  objects are only drawn within (0,0)-(canvas W,H) of the layer's own coordinates. `RenderLayerContent` clips to that
+  (min of frame and canvas); `LayersPanelControl.GrowFrameToCover` only grows a frame to the on-canvas part of dropped
+  objects (a frame grown to 3501×2001 at −802,−896 made a whole row vanish in GT); Fit to visible clamps to the canvas;
+  `MainWindow.ViewportWarning` flags such layers in the status bar on open and save
 - **Fit to visible (Format › Layer):** `GtCanvasControl.VisibleContentBounds(layer)` renders the layer's visible objects
   (export mode, at rest) into a frame-sized bitmap and returns the alpha bounding box in doc space;
   `MainWindow.FitLayerToVisible` floors/ceils it to whole pixels, moves/resizes the layer (keeping any Inner/Dimensions

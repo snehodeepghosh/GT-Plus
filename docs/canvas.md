@@ -67,6 +67,17 @@ Only content inside the current frame counts, since that is all the layer shows.
 position and size and its objects' positions, all ordinary GT values. Animations on the layer itself (Fly, Zoom,
 Reveal) are measured against its frame, so they now play relative to the tighter frame.
 
+## Layers must stay on the canvas
+
+vMix draws a layer's contents through a window the size of the canvas, measured from the layer's own top-left corner.
+If a layer's frame starts left of or above the canvas, or runs past it, the objects that end up beyond the canvas width
+or height in that layer's coordinates are **not drawn at all** in GT or vMix.
+
+- The canvas shows a layer the same way, so anything vMix would lose disappears here too.
+- Opening or saving a title with such a layer shows a ⚠ note in the status bar naming it.
+- To repair it, select the layer and use **Format › Layer › Fit to visible**. Fit to visible never makes a frame larger
+  than the canvas.
+
 ## Layers panel
 
 - **Double-click** a layer or object row to rename it in place. **Enter** keeps the new name, **Esc** cancels, and
@@ -74,7 +85,7 @@ Reveal) are measured against its frame, so they now play relative to the tighter
 - Rows show the normal arrow pointer. Drag a row up or down to reorder it.
 - Dragging an object into **another layer** keeps it where it is on screen: its position is converted to the new
   layer's frame. If the object reaches outside that frame, the frame **grows** just enough to cover it, so nothing is
-  cut off. The layer's other objects don't move on screen, and undo puts both the object and the frame back.
+  cut off. The frame never grows past the edge of the canvas (see below). The layer's other objects don't move on screen, and undo puts both the object and the frame back.
 - Holding **Option** over the line between two rows shows the clipping cursor; see [Masks](masks.md).
 - **Cut / Copy / Paste** are on an object row's right-click menu, on the Home tab's Clipboard group, and on
   Cmd+X / Cmd+C / Cmd+V (Ctrl on Windows). Cut copies the selected objects, with the animations aimed at them, and
