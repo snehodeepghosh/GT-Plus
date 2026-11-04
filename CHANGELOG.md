@@ -4,6 +4,13 @@ Optimal GT Designer is a fork of [GT Plus](https://github.com/Coow/GT-Plus) 0.1.
 on this fork, from the first update onwards. Throughout, titles stay plain vMix GT files: no feature changes how a
 `.gtzip` is written or how vMix reads it, and editor-only aids are never saved into the file.
 
+## 0.1.55 — 5 November 2026
+
+### Timeline
+- **Animate several layer groups at once.** With several groups selected, **+ Animation** gives each one its own clip,
+  as one undo step. The 1 · 2 · 3 slot picker sets that slot on every selected group. Before, only the last group
+  picked got the animation.
+
 ## 0.1.54 — 5 November 2026
 
 ### Fixes

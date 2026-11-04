@@ -1878,8 +1878,10 @@ public partial class MainWindow : Window
     /// <summary>every object a new animation should target: the selected layer, or all selected elements walked in document order so a group add lands the clips in the order the layers panel lists them rather than in selection order</summary>
     private IReadOnlyList<string> SelectedAnimationTargets()
     {
-        if (GtCanvas.SelectedLayer is { } layer)
-            return string.IsNullOrEmpty(layer.Name) ? Array.Empty<string>() : new[] { layer.Name };
+        // every selected layer group gets its own clip, in document order like objects
+        if (GtCanvas.SelectedLayers.Count > 0 && GtCanvas.Document is { } layerDoc)
+            return layerDoc.Layers.Where(l => GtCanvas.SelectedLayers.Contains(l) && !string.IsNullOrEmpty(l.Name))
+                                  .Select(l => l.Name).ToList();
 
         var selected = GtCanvas.SelectedElements;
         if (selected.Count == 0) return Array.Empty<string>();
