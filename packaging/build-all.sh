@@ -13,6 +13,8 @@ version="${1:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "
 shift || true
 platforms=("$@"); [ ${#platforms[@]} -eq 0 ] && platforms=(mac windows linux)
 dist="$root/dist"; mkdir -p "$dist"
+# the app reports (About, update check) the version in version.json, so it is stamped with the one being built
+printf '{\n  "version": "%s"\n}\n' "$version" > "$root/version.json"
 
 publish() {   # rid outdir
   dotnet publish "$root/src/GtPlus/GtPlus.csproj" -c Release -r "$1" --self-contained \

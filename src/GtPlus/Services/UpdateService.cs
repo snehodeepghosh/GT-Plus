@@ -52,8 +52,9 @@ public record UpdateCheckResult(bool Success, UpdateInfo? Latest, bool IsNewer, 
 
 public class UpdateService
 {
-    public const string ReleasesUrl = "https://github.com/Coow/GT-Plus/releases";
-    private const string LatestApi  = "https://api.github.com/repos/Coow/GT-Plus/releases/latest";
+    // Optimal GT Designer's own releases (this fork), not the upstream GT Plus project's
+    public const string ReleasesUrl = "https://github.com/snehodeepghosh/GT-Plus/releases";
+    private const string LatestApi  = "https://api.github.com/repos/snehodeepghosh/GT-Plus/releases/latest";
 
     // GitHub rejects requests without a User-Agent; the timeout keeps a startup check from hanging the app
     private static readonly HttpClient Http = CreateClient();
