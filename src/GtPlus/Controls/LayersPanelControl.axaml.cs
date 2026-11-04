@@ -131,6 +131,15 @@ public partial class LayersPanelControl : UserControl
         // right-click opens the context menu, never starts a reorder drag
         if (!e.GetCurrentPoint(border).Properties.IsLeftButtonPressed) return;
 
+        // double-clicking a row edits its name in place
+        if (e.ClickCount == 2)
+        {
+            _dragging = null;
+            BeginRename(meta.Layer, meta.Element);
+            e.Handled = true;
+            return;
+        }
+
         _dragging    = meta;
         _dragStartPt = e.GetPosition(LayersStack);
         _isDragging  = false;
@@ -406,7 +415,7 @@ public partial class LayersPanelControl : UserControl
         {
             Background = new SolidColorBrush(Color.Parse("#1e1e1e")),
             Padding    = new Thickness(6, 4, 6, 4),
-            Cursor     = new Cursor(StandardCursorType.SizeNorthSouth),
+            Cursor     = RowCursor,
             Child      = inner,
         };
 
@@ -911,7 +920,8 @@ public partial class LayersPanelControl : UserControl
     /// <summary>how close to a row's top or bottom edge counts as the line between two rows</summary>
     private const double ClipLineReach = 6;
 
-    private static readonly Cursor RowCursor = new(StandardCursorType.SizeNorthSouth);
+    /// <summary>rows show the ordinary arrow, as Photoshop's and Figma's layer lists do; dragging to reorder still works from it</summary>
+    private static readonly Cursor RowCursor = Cursor.Default;
     private static Cursor? _clipCursor, _releaseCursor;
     private (GtLayer Layer, GtElement Element, Border Row, double Y)? _clipHover;
 
