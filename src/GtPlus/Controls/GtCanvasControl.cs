@@ -689,9 +689,17 @@ public class GtCanvasControl : Control
         return false;
     }
 
-    /// <summary>the union box a resize handle produces, used to snap the dragged edges</summary>
-    private static Rect ResizedBounds(Rect bounds, ResizeHandle handle, double dx, double dy)
+    /// <summary>the union box a resize handle produces, used to snap the dragged edges; from the centre the opposite edges move the other way by the same amount</summary>
+    private static Rect ResizedBounds(Rect bounds, ResizeHandle handle, double dx, double dy, bool fromCenter)
     {
+        if (fromCenter)
+        {
+            var one = ResizedBounds(bounds, handle, dx, dy, false);
+            double cw = Math.Max(0, bounds.Width  + 2 * (one.Width  - bounds.Width));
+            double ch = Math.Max(0, bounds.Height + 2 * (one.Height - bounds.Height));
+            return new Rect(bounds.Center.X - cw / 2, bounds.Center.Y - ch / 2, cw, ch);
+        }
+
         double x = bounds.X, y = bounds.Y, w = bounds.Width, h = bounds.Height;
         switch (handle)
         {
@@ -981,8 +989,10 @@ public class GtCanvasControl : Control
         ClearWebFocus();
 
         // previewing falls back to selection for every tool: the model geometry the handles and drags work against is not where the objects are being drawn
+        // Option/Alt on a resize handle is a resize from the centre, not the temporary Select tool Alt gives everywhere else
+        bool altOnHandle = alt && !IsPreviewing && ActiveTool == CanvasTool.Edit && HitTestHandle(docPt) != ResizeHandle.None;
         bool useSelect = IsPreviewing || ActiveTool == CanvasTool.Select ||
-                         (ActiveTool == CanvasTool.Edit && alt);
+                         (ActiveTool == CanvasTool.Edit && alt && !altOnHandle);
 
         if (useSelect)
         {
@@ -1220,7 +1230,7 @@ public class GtCanvasControl : Control
             {
                 var dx = docPt.X - _resizeStart.X;
                 var dy = docPt.Y - _resizeStart.Y;
-                var predicted = ResizedBounds(_resizeOriginBounds, _activeHandle, dx, dy);
+                var predicted = ResizedBounds(_resizeOriginBounds, _activeHandle, dx, dy, false);
 
                 bool left   = _activeHandle is ResizeHandle.NW or ResizeHandle.W or ResizeHandle.SW;
                 bool right  = _activeHandle is ResizeHandle.NE or ResizeHandle.E or ResizeHandle.SE;
@@ -1271,6 +1281,8 @@ public class GtCanvasControl : Control
         if (_isResizing)
         {
             var shiftHeld = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+            // Option/Alt resizes from the centre: the opposite side moves out as far as the dragged one, read live so it can be pressed or let go mid-drag
+            var altHeld   = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
             var target    = docPt;
 
             _snapLines.Clear();
@@ -1279,7 +1291,7 @@ public class GtCanvasControl : Control
             {
                 var dx = docPt.X - _resizeStart.X;
                 var dy = docPt.Y - _resizeStart.Y;
-                var predicted = ResizedBounds(_resizeOriginBounds, _activeHandle, dx, dy);
+                var predicted = ResizedBounds(_resizeOriginBounds, _activeHandle, dx, dy, altHeld);
 
                 bool left   = _activeHandle is ResizeHandle.NW or ResizeHandle.W or ResizeHandle.SW;
                 bool right  = _activeHandle is ResizeHandle.NE or ResizeHandle.E or ResizeHandle.SE;
@@ -1291,7 +1303,7 @@ public class GtCanvasControl : Control
                 _snapLines.AddRange(solution.Lines);
             }
 
-            ApplyResizeDelta(target, shiftHeld);
+            ApplyResizeDelta(target, shiftHeld, altHeld);
             InvalidateVisual();
             TransformLive?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
@@ -1704,7 +1716,7 @@ public class GtCanvasControl : Control
 
         var (origLoc, origDim) = _layerResizeOrigin;
         var box = ResizedBounds(new Rect(origLoc.X, origLoc.Y, origDim.Width, origDim.Height),
-                                _activeHandle, docPt.X - _resizeStart.X, docPt.Y - _resizeStart.Y);
+                                _activeHandle, docPt.X - _resizeStart.X, docPt.Y - _resizeStart.Y, false);
 
         bool leftEdge = _activeHandle is ResizeHandle.NW or ResizeHandle.W or ResizeHandle.SW;
         bool topEdge  = _activeHandle is ResizeHandle.NW or ResizeHandle.N or ResizeHandle.NE;
@@ -1804,7 +1816,7 @@ public class GtCanvasControl : Control
         _                                     => Cursor.Default
     };
 
-    private void ApplyResizeDelta(Point docPt, bool constrainAspect = false)
+    private void ApplyResizeDelta(Point docPt, bool constrainAspect = false, bool fromCenter = false)
     {
         double dx = docPt.X - _resizeStart.X;
         double dy = docPt.Y - _resizeStart.Y;
@@ -1827,6 +1839,27 @@ public class GtCanvasControl : Control
                 case ResizeHandle.S:                     h += dy;          break;
                 case ResizeHandle.SW: x += dx; w -= dx;  h += dy;          break;
                 case ResizeHandle.W:  x += dx; w -= dx;                    break;
+            }
+
+            // from the centre: each moved side's change is mirrored on the opposite side, about the object's own centre
+            if (fromCenter)
+            {
+                double cx = origLoc.X + origDim.Width / 2, cy = origLoc.Y + origDim.Height / 2;
+                w = origDim.Width  + 2 * (w - origDim.Width);
+                h = origDim.Height + 2 * (h - origDim.Height);
+                if (constrainAspect && origDim.Width > 0 && origDim.Height > 0 && w > 0 && h > 0)
+                {
+                    double ratio = origDim.Width / origDim.Height;
+                    bool corner = _activeHandle is ResizeHandle.NW or ResizeHandle.NE or ResizeHandle.SE or ResizeHandle.SW;
+                    bool vertical = _activeHandle is ResizeHandle.N or ResizeHandle.S;
+                    if (corner ? w / h > ratio : !vertical) h = w / ratio; else w = h * ratio;
+                }
+                w = Math.Max(1, w); h = Math.Max(1, h);
+                x = cx - w / 2; y = cy - h / 2;
+                if (SnapToPixelGrid) { x = Math.Round(x); y = Math.Round(y); w = Math.Round(w); h = Math.Round(h); }
+                el.Location   = new GtPoint(x, y);
+                el.Dimensions = new GtSize(w, h);
+                continue;
             }
 
             if (constrainAspect && origDim.Width > 0 && origDim.Height > 0 && w > 0 && h > 0)

@@ -94,7 +94,9 @@ images, UI aids, view state) stays in memory or preferences and is never written
   - Plain prop: `HistoryService? History` - push actions here
   - Selection: `SelectedElements`, `SetSelection`, `ToggleSelection`, `ClearSelection`, `SelectionChanged` event
   - Select tool: click to select, drag an element to move it (not while previewing), Shift+click to toggle, Ctrl+drag for rubber-band box
-  - Edit tool: click to select, drag to move, handle drag to resize; Alt held = temporary Select
+  - Edit tool: click to select, drag to move, handle drag to resize; Alt held = temporary Select, except a press on a
+    resize handle, which resizes from the centre (`ApplyResizeDelta(fromCenter)`, Alt read live on every move; snapping
+    uses the centred `ResizedBounds`)
   - Resize handles: 8 per selected element (individual bounds, not group bounds); all selected elements resize by same delta
   - Locked elements / locked layers cannot be moved or resized
   - `ElementAbsBounds(layer, el)` → absolute doc-space Rect (layer.Location + el.Location)
