@@ -122,8 +122,9 @@ public partial class MainWindow : Window
         // Delete acts on whichever surface was last clicked, so the key means "delete what I am working on" rather than always the canvas; tunnelled since the timeline's own handlers mark pointer presses handled and a bubbling handler would never see them
         TimelinePanel.AddHandler(PointerPressedEvent, (_, _) => _timelineIsActiveSurface = true,
                                  RoutingStrategies.Tunnel);
-        CanvasScrollViewer.AddHandler(PointerPressedEvent, (_, _) => _timelineIsActiveSurface = false,
-                                      RoutingStrategies.Tunnel);
+        // any press elsewhere in the main window (canvas, layers, properties, ribbon) moves the active surface off the timeline;
+        // the window's tunnel runs before the timeline's, so a press inside the timeline still ends up true
+        AddHandler(PointerPressedEvent, (_, _) => _timelineIsActiveSurface = false, RoutingStrategies.Tunnel, handledEventsToo: true);
         TimelinePanel.StoryboardEdited   += () => GtCanvas.InvalidateVisual();
 
         // the layers panel offers the same sequence shortcut the timeline strip carries; the timeline owns both the enable rule and the work
@@ -918,8 +919,10 @@ public partial class MainWindow : Window
                 GtCanvas.ClearSelection();
                 e.Handled = true;
                 break;
+            // Space plays and pauses only while the timeline is what you are working in: last clicked, under the pointer, or its own window in front
             case Key.Space when e.KeyModifiers == KeyModifiers.None
-                             && e.Source is not TextBox && TimelinePanel.IsVisible:
+                             && !IsTextInputSource(e.Source) && TimelinePanel.IsVisible
+                             && (_timelineIsActiveSurface || TimelinePanel.IsPointerOver || _timelineWindow?.IsActive == true):
                 TimelinePanel.TogglePlay();
                 e.Handled = true;
                 break;

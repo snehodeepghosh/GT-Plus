@@ -136,6 +136,12 @@ images, UI aids, view state) stays in memory or preferences and is never written
   rest are items of `BarWrap` (picker+transport, storyboard commands, the clip grid, the direction pad) that wrap onto
   more lines as the panel narrows. `BarGrip` under it pulls the bar's height (38px up to what leaves `MinTrackHeight`
   for the track); double-click resets it to fit its contents. `OnSizeChanged` caps `BarHost.MaxHeight` the same way
+- **Timeline zoom**: `TimelinePanelControl.OnTrackWheel` (tunnel on `TrackScroller`) handles Cmd/Ctrl+wheel through
+  `ZoomTimeline(factor, viewportX)`, which sets `ZoomSlider.Value` (→ `Track.PixelsPerSecond`) and shifts the scroll
+  offset so the time under the pointer stays put (a pointer over the pinned gutter anchors at its edge)
+- **Space = play/pause** only when the timeline is the active surface: `_timelineIsActiveSurface` (a window-level
+  tunnel press sets it false, the timeline's own tunnel press sets it true), `TimelinePanel.IsPointerOver`, or the
+  detached timeline window is active. Text inputs (`IsTextInputSource`) never trigger it
 - **Detached timeline** (`MainWindow.DetachTimeline`/`DockTimeline`): the panel's detach button raises
   `DetachRequested`; MainWindow moves the *same* `TimelinePanel` out of its DockPanel into an unowned `Window`
   (unowned so macOS does not tie it to the main window), remembering host/index/height to put it back. Closing that

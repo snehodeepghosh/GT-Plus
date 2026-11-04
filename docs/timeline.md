@@ -51,3 +51,12 @@ When the panel gets narrow, its groups wrap onto more lines.
 
 - **Drag the grip** under the bar to make it taller or shorter.
 - **Double-click the grip** to fit the bar to its contents again.
+
+## Zoom and playback keys
+
+- **Cmd+scroll** (Ctrl+scroll on Windows and Linux) over the track zooms the time axis in and out. The moment under
+  the pointer stays where it is. The zoom slider at the top right follows along and sets the same range (12–600 px
+  per second).
+- **Space** plays and pauses only while you're working in the timeline: when it was the last thing you clicked, when
+  the pointer is over it, or when its detached window is in front. Anywhere else (the canvas, the layers panel, a text
+  box) Space does nothing to playback.

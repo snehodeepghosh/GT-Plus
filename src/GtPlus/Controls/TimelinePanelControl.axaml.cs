@@ -103,6 +103,9 @@ public partial class TimelinePanelControl : UserControl
         // the track pins its ruler and name gutter to whatever part of it is on screen
         TrackScroller.ScrollChanged += (_, _) => Track.ScrollOffset = TrackScroller.Offset;
 
+        // Cmd+scroll (Ctrl+scroll elsewhere) zooms the time axis around the pointer; tunnelled so the scroller does not scroll first
+        TrackScroller.AddHandler(PointerWheelChangedEvent, OnTrackWheel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+
         _playTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000.0 / TargetFps) };
         _playTimer.Tick += OnPlayTick;
 
@@ -823,6 +826,34 @@ public partial class TimelinePanelControl : UserControl
                 ? "M 21,3 L 11,13 M 11,6 L 11,13 L 18,13 M 17,16 L 17,21 L 3,21 L 3,7 L 8,7"
                 : "M 10,3 L 21,3 L 21,14 M 21,3 L 11,13 M 17,13 L 17,21 L 3,21 L 3,7 L 11,7");
         }
+    }
+
+    private void OnTrackWheel(object? sender, PointerWheelEventArgs e)
+    {
+        if (!GtPlus.Services.PlatformKeys.HasCommand(e.KeyModifiers)) return;
+        e.Handled = true;
+        // a mouse wheel notch is 1; a trackpad sends small fractions, which zoom smoothly
+        double delta = Math.Abs(e.Delta.Y) >= Math.Abs(e.Delta.X) ? e.Delta.Y : e.Delta.X;
+        if (delta == 0) return;
+        ZoomTimeline(Math.Pow(1.15, Math.Clamp(delta, -4, 4)), e.GetPosition(TrackScroller).X);
+    }
+
+    /// <summary>scales the time axis by <paramref name="factor"/>, keeping the moment under <paramref name="viewportX"/> (in the scroller's coordinates) where it is on screen</summary>
+    public void ZoomTimeline(double factor, double viewportX)
+    {
+        double oldPps = Track.PixelsPerSecond;
+        double newPps = Math.Clamp(oldPps * factor, ZoomSlider.Minimum, ZoomSlider.Maximum);
+        if (Math.Abs(newPps - oldPps) < 1e-9) return;
+
+        // the name gutter stays pinned on screen, so a pointer over it anchors at the first visible moment instead
+        const double origin = TimelineTrackControl.GutterWidth + TimelineTrackControl.LeadIn;
+        double anchor = Math.Max(viewportX, TimelineTrackControl.GutterWidth);
+        double contentX = TrackScroller.Offset.X + anchor;
+        double newContentX = origin + (contentX - origin) * newPps / oldPps;
+
+        ZoomSlider.Value = newPps;   // sets Track.PixelsPerSecond
+        TrackScroller.UpdateLayout();
+        TrackScroller.Offset = new Vector(Math.Max(0, newContentX - anchor), TrackScroller.Offset.Y);
     }
 
     private void ZoomSlider_ValueChanged(object? sender, Avalonia.Controls.Primitives.RangeBaseValueChangedEventArgs e)
