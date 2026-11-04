@@ -926,11 +926,19 @@ public partial class LayersPanelControl : UserControl
         var clip = new MenuItem { Header = "Create Clipping Mask" };
         clip.Click += (_, _) => ToggleClip(layer, element);
 
+        var copyAttributes = new MenuItem { Header = "Copy Attributes" };
+        copyAttributes.Click += (_, _) => CopyAttributes(element);
+        var pasteAttributes = new MenuItem { Header = "Paste Attributes" };
+        pasteAttributes.Click += (_, _) => PasteAttributes();
+
         var menu = new ContextMenu();
         menu.Items.Add(rename);
         menu.Items.Add(new Separator());
         menu.Items.Add(duplicate);
         menu.Items.Add(delete);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(copyAttributes);
+        menu.Items.Add(pasteAttributes);
         menu.Items.Add(new Separator());
         menu.Items.Add(clip);
         menu.Items.Add(sequenceSeparator);
@@ -953,6 +961,9 @@ public partial class LayersPanelControl : UserControl
             // a locked element is immovable everywhere else, so it is not deletable either
             delete.IsEnabled    = DeletableSelection().Count > 0;
 
+            pasteAttributes.IsEnabled = _copiedAttributes is not null && DeletableSelection().Count > 0;
+            pasteAttributes.Header    = "Paste Attributes" + (count > 1 ? $" to {count} Elements" : "");
+
             bool isSequence = SequenceFrameCount(element) > 1;
             sequenceSeparator.IsVisible = isSequence;
             addSequence.IsVisible       = isSequence;
@@ -967,6 +978,66 @@ public partial class LayersPanelControl : UserControl
         };
 
         return menu;
+    }
+
+    // ── copy / paste attributes ─────────────────────────────────────────
+
+    /// <summary>the Format tab's Location, Rotate and Dimensions values of one object, as the ribbon shows them (X/Y at the object's anchor point)</summary>
+    private sealed record TransformAttributes(double X, double Y, double Z, double RotateX, double RotateY, double RotateZ,
+                                              double Width, double Height, double Depth);
+
+    /// <summary>what Copy Attributes last took; shared by every panel instance so it survives opening another title</summary>
+    private static TransformAttributes? _copiedAttributes;
+
+    private void CopyAttributes(GtElement element) =>
+        _copiedAttributes = new TransformAttributes(element.AnchorX(), element.AnchorY(), element.Z,
+                                                    element.RotateX, element.RotateY, element.RotateZ,
+                                                    element.Dimensions.Width, element.Dimensions.Height, element.Depth);
+
+    /// <summary>gives every selected, unlocked object the copied Location, Rotate and Dimensions, one undo step; each lands with its own anchor point on the copied X/Y, so the ribbon reads the same numbers on all of them. Only ordinary element attributes change, so the file stays plain GT</summary>
+    public bool PasteAttributes()
+    {
+        if (_doc is null || _copiedAttributes is not { } a) return false;
+        var targets = DeletableSelection().Select(t => t.Element).ToList();
+        if (targets.Count == 0) return false;
+
+        var befores = targets.Select(Capture).ToList();
+        foreach (var el in targets)
+        {
+            el.Dimensions = new GtSize(a.Width, a.Height);
+            el.SetAnchorX(a.X);
+            el.SetAnchorY(a.Y);
+            el.Z = a.Z; el.Depth = a.Depth;
+            el.RotateX = a.RotateX; el.RotateY = a.RotateY; el.RotateZ = a.RotateZ;
+        }
+        var afters = targets.Select(Capture).ToList();
+
+        var doc = _doc;
+        void Set(List<TransformAttributes> values)
+        {
+            for (int i = 0; i < targets.Count; i++) Restore(targets[i], values[i]);
+            AfterStructureChange(doc);
+            _canvas?.ClearSelection();
+            foreach (var el in targets) _canvas?.SetSelection(el, addToSelection: true);
+        }
+        Set(afters);
+        History?.Push(new PropertyChangeAction(
+            targets.Count == 1 ? $"Paste attributes ({targets[0].Name})" : $"Paste attributes to {targets.Count} elements",
+            undo: () => Set(befores), redo: () => Set(afters)));
+        return true;
+
+        // the raw model values, so undo puts each object back exactly whatever its anchor
+        static TransformAttributes Capture(GtElement el) =>
+            new(el.Location.X, el.Location.Y, el.Z, el.RotateX, el.RotateY, el.RotateZ,
+                el.Dimensions.Width, el.Dimensions.Height, el.Depth);
+
+        static void Restore(GtElement el, TransformAttributes v)
+        {
+            el.Location   = new GtPoint(v.X, v.Y);
+            el.Dimensions = new GtSize(v.Width, v.Height);
+            el.Z = v.Z; el.Depth = v.Depth;
+            el.RotateX = v.RotateX; el.RotateY = v.RotateY; el.RotateZ = v.RotateZ;
+        }
     }
 
     // ── clipping masks ──────────────────────────────────────────────────

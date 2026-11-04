@@ -57,3 +57,8 @@ Reveal) are measured against its frame, so they now play relative to the tighter
   layer's frame. If the object reaches outside that frame, the frame **grows** just enough to cover it, so nothing is
   cut off. The layer's other objects don't move on screen, and undo puts both the object and the frame back.
 - Holding **Option** over the line between two rows shows the clipping cursor; see [Masks](masks.md).
+- **Right-click › Copy Attributes** remembers an object's Format values: Location X/Y/Z, Rotate X/Y/Z and
+  Width/Height/Depth. **Right-click › Paste Attributes** gives those values to every selected, unlocked object, as
+  one undo step. X/Y are the numbers the Format tab shows, so they are measured at each object's own anchor point;
+  objects with different anchors get the same numbers, not the same box. The copy is kept until you copy something
+  else, even across titles. Only ordinary object attributes change, so the file stays plain GT.

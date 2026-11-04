@@ -207,6 +207,9 @@ images, UI aids, view state) stays in memory or preferences and is never written
   for release), refreshed on Option key down/up via top-level key handlers. `ClipBaseOf` = the mask object when it sits
   below in the same layer; such rows get the bent-arrow indent (`ClipArrowPath`) and their base an underline. Canvas `HitTest` skips a masked object where
   `IsDrawnAt` (renders it into a 3×3 bitmap around the point) finds no alpha
+- **Copy/Paste Attributes** (Layers row menu, `LayersPanelControl.CopyAttributes`/`PasteAttributes`): static
+  `_copiedAttributes` = anchor X/Y, Z, RotateX/Y/Z, Width/Height/Depth (the Format tab's Location/Rotate/Dimensions).
+  Paste sets size first then `SetAnchorX/Y` on every unlocked selected element; one undo step restoring raw Location
 - **Reference image:** `GtCanvasControl.ReferenceImage/Visible/Opacity/Difference`, drawn by `RenderReference` above the
   layers and skipped in `_exportMode`; MainWindow's View › Reference group drives it (`SetReference`). After a PSD import
   it is `PsdImportResult.ReferencePng`, from `PsdFile.Composite` (the image data section, read by
