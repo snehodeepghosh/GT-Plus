@@ -106,6 +106,8 @@ public partial class TimelinePanelControl : UserControl
         // Cmd+scroll (Ctrl+scroll elsewhere) zooms the time axis around the pointer; tunnelled so the scroller does not scroll first
         TrackScroller.AddHandler(PointerWheelChangedEvent, OnTrackWheel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
 
+        SlotsChanged += RefreshSlotUi;
+
         _playTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000.0 / TargetFps) };
         _playTimer.Tick += OnPlayTick;
 
@@ -497,6 +499,7 @@ public partial class TimelinePanelControl : UserControl
         if (_suppressPropertyEvents || _document is null) return;
         int i = StoryboardCombo.SelectedIndex;
         SetView(i >= 0 && i < _views.Count ? _views[i] : null);
+        SlotsChanged?.Invoke();
     }
 
     /// <summary>offers every storyboard GT knows about; types the document already holds stay in the list ticked and disabled so the menu doubles as a view of what the title has, and a second storyboard of the same type would never be triggered by vMix anyway</summary>
@@ -1068,6 +1071,12 @@ public partial class TimelinePanelControl : UserControl
         SelectionLabel.Text      = count > 1 ? $"{count} clips selected" : "";
 
         if (anim is not null) LoadPropertyStrip(anim);
+        if (anim is not null && !anim.IsPlaceholder)
+        {
+            int index = SlotRows(_selectedStoryboard, anim.Object).IndexOf(anim);
+            if (index is >= 0 and < 3) _currentSlot = index;
+        }
+        SlotsChanged?.Invoke();
     }
 
     /// <summary>every clip the strip edits: the whole track selection, primary last</summary>
@@ -1338,8 +1347,209 @@ public partial class TimelinePanelControl : UserControl
         AddSequenceAnimation(SelectedElementProvider?.Invoke());
 
     /// <summary>re-reads what the canvas has selected; the host calls it when the selection moves so the sequence shortcut greys in step with it</summary>
-    public void RefreshSelectionState() =>
+    public void RefreshSelectionState()
+    {
         AddSequenceButton.IsEnabled = CanAddSequenceAnimation(SelectedElementProvider?.Invoke());
+        SlotsChanged?.Invoke();
+    }
+
+    // ---- GT's three transition slots ------------------------------------------------------------------------------------
+    // GT Title Designer's Animations ribbon edits an object's animations as three numbered slots: slot N is the object's
+    // Nth row in the storyboard, counting GT's <None> placeholder rows. Picking a type for a slot does what GT's
+    // GraphicsStoryboard.SetAnimationBuilderByIndex does: an existing row is swapped for the new type keeping its Delay,
+    // Duration, Reverse, Interpolation and Speed; a slot past the end is reached by padding with <None Object="X"/> rows;
+    // and "None" puts a placeholder in the slot rather than deleting it. Only rows GT itself writes are ever produced.
+
+    /// <summary>raised whenever the slots shown for the selection may have changed: storyboard switched, selection moved, or an edit</summary>
+    public event Action? SlotsChanged;
+
+    /// <summary>the storyboard the slot gallery edits: the one the timeline is showing (the selected clip's half of a combined view)</summary>
+    public GtStoryboard? SlotStoryboard => TargetStoryboard;
+
+    /// <summary>the label of the storyboard view on the timeline, for the gallery's caption</summary>
+    public string SlotStoryboardLabel => _view?.Label ?? "TransitionIn";
+
+    /// <summary>the objects the gallery applies to, first one is the one whose slots are shown</summary>
+    public IReadOnlyList<string> SlotTargets()
+    {
+        if (_document is null) return Array.Empty<string>();
+        // clips picked on the timeline say which objects are meant; otherwise whatever the canvas has selected
+        var fromClips = SelectedAnimations.Select(a => a.Object).Where(n => !string.IsNullOrEmpty(n))
+                                          .Distinct(StringComparer.Ordinal).ToList();
+        if (fromClips.Count > 0)
+        {
+            // the primary clip's object leads, so the slots shown are its slots
+            if (_selected is { } primary && fromClips.Remove(primary.Object)) fromClips.Insert(0, primary.Object);
+            return fromClips;
+        }
+        return TargetObjectNames().Where(n => !string.IsNullOrEmpty(n)).ToList();
+    }
+
+    /// <summary>an object's rows in <paramref name="storyboard"/> in order, placeholders included, so index = GT slot</summary>
+    public static List<GtAnimation> SlotRows(GtStoryboard? storyboard, string objectName) =>
+        storyboard?.Animations.Where(a => string.Equals(a.Object, objectName, StringComparison.Ordinal)).ToList()
+        ?? new List<GtAnimation>();
+
+    /// <summary>the types offered in the gallery for the shown storyboard: None first, then what that storyboard can play</summary>
+    public IReadOnlyList<GtAnimationType> SlotTypes()
+    {
+        bool continuous = TargetStoryboard?.IsContinuousEvent == true;
+        var list = new List<GtAnimationType> { GtAnimationType.None };
+        list.AddRange(Enum.GetValues<GtAnimationType>()
+            .Where(t => t is not (GtAnimationType.Unknown or GtAnimationType.None) && GtAnimation.IsContinuous(t) == continuous)
+            .OrderBy(t => t.ToString(), StringComparer.Ordinal));
+        return list;
+    }
+
+    /// <summary>sets slot <paramref name="slot"/> (0-2) of every target object to <paramref name="type"/> on the shown storyboard, as one undoable edit</summary>
+    public void SetSlot(int slot, GtAnimationType type)
+    {
+        if (_document is null || slot < 0 || slot >= GtStoryboard.MaxAnimationsPerObject) return;
+        var names = SlotTargets().ToList();
+        if (names.Count == 0) return;
+
+        var storyboard = TargetStoryboard;
+        bool created = false;
+        if (storyboard is null)
+        {
+            if (type == GtAnimationType.None) return;
+            storyboard = new GtStoryboard();
+            created = true;
+        }
+
+        var owner  = storyboard;
+        var before = owner.Animations.ToList();
+        var after  = owner.Animations.ToList();
+        var placed = new List<GtAnimation>();
+
+        foreach (var name in names)
+        {
+            var rows = after.Where(a => string.Equals(a.Object, name, StringComparison.Ordinal)).ToList();
+            var fresh = type == GtAnimationType.None ? Placeholder(name) : NewAnimation(type, name);
+
+            if (slot < rows.Count)
+            {
+                var old = rows[slot];
+                if (old.Type == type && old.TypeName == type.ToString()) { if (!old.IsPlaceholder) placed.Add(old); continue; }
+                // what GT's GraphicsAnimationBuilder.CopyTo carries across a type swap
+                fresh.Delay = old.Delay;
+                fresh.Reverse = old.Reverse;
+                if (type != GtAnimationType.None)
+                {
+                    fresh.Interpolation = old.Interpolation;
+                    if (!old.IsPlaceholder)
+                    {
+                        if (!GtAnimation.IsContinuous(type) && old.Duration is { } d) fresh.Duration = d;
+                        if (GtAnimation.IsContinuous(type) && old.Speed is { } sp) fresh.Speed = sp;
+                    }
+                }
+                after[after.IndexOf(old)] = fresh;
+            }
+            else
+            {
+                if (type == GtAnimationType.None) continue;   // an empty slot set to None stays empty, nothing to pad for
+                // reaching a later slot pads the gap with GT's placeholders, then the row joins the end like GT's Add
+                for (int i = rows.Count; i < slot; i++) after.Add(Placeholder(name));
+                after.Add(fresh);
+            }
+            if (!fresh.IsPlaceholder) placed.Add(fresh);
+        }
+
+        if (before.SequenceEqual(after) && !created) { SlotsChanged?.Invoke(); return; }
+
+        void Apply(List<GtAnimation> rows, bool withStoryboard)
+        {
+            if (created)
+            {
+                if (withStoryboard && !_document.Storyboards.Contains(owner)) _document.Storyboards.Add(owner);
+                if (!withStoryboard) _document.Storyboards.Remove(owner);
+                RebuildStoryboardList();
+                if (withStoryboard)
+                    StoryboardCombo.SelectedIndex = _views.FindIndex(v => !v.IsCombined && v.Segments[0].Storyboard == owner);
+            }
+            owner.Animations.Clear();
+            owner.Animations.AddRange(rows);
+            AfterModelChange();
+            var live = placed.Where(owner.Animations.Contains).ToList();
+            if (withStoryboard && live.Count > 0) { Track.SetSelection(live); SyncSelection(Track.SelectedAnimation, owner); }
+            else { SelectAnimation(null); SlotsChanged?.Invoke(); }
+        }
+
+        Apply(after, true);
+        string what = type == GtAnimationType.None ? "Clear" : $"Set {type}";
+        History?.Push(new PropertyChangeAction($"{what} in transition slot {slot + 1}",
+            undo: () => Apply(before, false), redo: () => Apply(after, true)));
+    }
+
+    private int _currentSlot;
+    private bool _refreshingSlots;
+
+    /// <summary>re-reads the slot buttons and type picker for the first target object on the shown storyboard</summary>
+    private void RefreshSlotUi()
+    {
+        _refreshingSlots = true;
+        try
+        {
+            var targets = SlotTargets();
+            var rows = targets.Count > 0 ? SlotRows(TargetStoryboard, targets[0]) : new List<GtAnimation>();
+            var buttons = new[] { Slot1Button, Slot2Button, Slot3Button };
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                bool filled = i < rows.Count && !rows[i].IsPlaceholder;
+                buttons[i].IsChecked = i == _currentSlot;
+                buttons[i].Classes.Set("filled", filled);
+                ToolTip.SetTip(buttons[i], $"Slot {i + 1}: {(filled ? rows[i].TypeName : "empty")}");
+            }
+
+            var types = SlotTypes();
+            var names = types.Select(t => t.ToString()).ToList();
+            if (SlotTypeCombo.ItemsSource is not List<string> current || !current.SequenceEqual(names))
+                SlotTypeCombo.ItemsSource = names;
+            var type = _currentSlot < rows.Count ? rows[_currentSlot].Type : GtAnimationType.None;
+            SlotTypeCombo.SelectedItem = type.ToString();
+
+            bool any = _document is not null && targets.Count > 0;
+            SlotPanel.IsEnabled = any;
+            ToolTip.SetTip(SlotTypeCombo, any
+                ? $"Animation in slot {_currentSlot + 1} for {(targets.Count > 1 ? $"{targets.Count} objects" : $"\"{targets[0]}\"")} on {SlotStoryboardLabel}"
+                : "Select an object to set its animations");
+        }
+        finally { _refreshingSlots = false; }
+    }
+
+    private void SlotButton_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not ToggleButton { Tag: string tag } || !int.TryParse(tag, out int slot)) return;
+        _currentSlot = slot;
+        // a filled slot brings its clip up in the strip; an empty one just waits for a type
+        var targets = SlotTargets();
+        if (targets.Count > 0)
+        {
+            var rows = SlotRows(TargetStoryboard, targets[0]);
+            if (slot < rows.Count && !rows[slot].IsPlaceholder)
+            {
+                Track.SetSelection(new[] { rows[slot] });
+                SyncSelection(Track.SelectedAnimation, TargetStoryboard);
+                return;
+            }
+        }
+        RefreshSlotUi();
+    }
+
+    private void SlotTypeCombo_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_refreshingSlots || _suppressPropertyEvents) return;
+        if (SlotTypeCombo.SelectedItem is string name && Enum.TryParse<GtAnimationType>(name, out var type))
+            SetSlot(_currentSlot, type);
+    }
+
+    /// <summary>GT's <c>&lt;None Object="X"/&gt;</c> row: no Duration attribute (GT drops its default of 1), nothing else</summary>
+    private static GtAnimation Placeholder(string objectName) => new()
+    {
+        TypeName = "None", Type = GtAnimationType.None, Object = objectName,
+        Direction = GtAnimation.DefaultDirectionFor(GtAnimationType.None),
+        Duration = null, Interpolation = GtInterpolation.Linear,
+    };
 
     private void AnimationProperty_Changed(object? sender, RoutedEventArgs e)
     {
@@ -1790,6 +2000,7 @@ public partial class TimelinePanelControl : UserControl
         foreach (var view in _views) view.RefreshIndicator();
         EmitPreview(Track.CurrentTime);
         StoryboardEdited?.Invoke();
+        SlotsChanged?.Invoke();
     }
 
     /// <summary>re-places the out-phase segments after the in-phase ones; a view can hold more than one storyboard per phase (a DataChange pair overlays the unscoped storyboard on the scoped one) so the out phase starts after the longest of the in-phase storyboards</summary>

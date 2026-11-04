@@ -60,3 +60,18 @@ When the panel gets narrow, its groups wrap onto more lines.
 - **Space** plays and pauses only while you're working in the timeline: when it was the last thing you clicked, when
   the pointer is over it, or when its detached window is in front. Anywhere else (the canvas, the layers panel, a text
   box) Space does nothing to playback.
+
+## Transition slots (1 · 2 · 3)
+
+Like GT Title Designer, each object can have up to three animations per storyboard, shown as numbered **slots** in
+the timeline bar.
+
+- The slot buttons show the object's slots on the storyboard you're viewing. A **green** number means that slot holds
+  an animation. The object is the one whose clip is selected on the timeline, otherwise what's selected on the canvas
+  (with several selected, every one gets the change).
+- **Click a slot**, then pick its animation type from the list under it. Picking a filled slot also selects its clip
+  so you can edit timing, easing and direction in the strip.
+- Changing a slot's type keeps its delay, duration, reverse, easing and speed, as GT does.
+- Picking slot 2 or 3 while earlier slots are empty fills the gap with GT's own `<None Object="…"/>` placeholder rows,
+  and **None** empties a slot the same way. These are exactly the rows GT writes, so the file stays plain GT.
+- Every change is one undo step.

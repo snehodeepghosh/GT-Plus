@@ -4,6 +4,20 @@
              x:Class="GtPlus.Controls.TimelinePanelControl">
 
     <UserControl.Styles>
+        <Style Selector="ToggleButton.slot">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="#9a9a9a" />
+        </Style>
+        <!-- green number = the slot holds an animation, as GT marks it -->
+        <Style Selector="ToggleButton.slot.filled">
+            <Setter Property="Foreground" Value="#5fd068" />
+        </Style>
         <!-- the bar is as tall as the direction pad, so every input in it is pinned to one height and centred; left to stretch they would grow to the full bar height and sit their text against the top edge -->
         <Style Selector="TextBox">
             <Setter Property="Height" Value="24" />
@@ -211,6 +225,19 @@
                                             VerticalAlignment="Center" IsEnabled="False"
                                             ToolTip.Tip="Set the clip length from the sequence's frame count and a target frame rate"
                                             Click="SequenceLength_Click" />
+                        </StackPanel>
+
+                        <!-- GT's three transition slots: slot N is the object's Nth row on this storyboard; picking a type fills it the way GT Title Designer does -->
+                        <StackPanel x:Name="SlotPanel" Spacing="4" VerticalAlignment="Top"
+                                    ToolTip.Tip="GT's transition slots: each object can have up to 3 animations per storyboard. Pick a slot, then its animation type; None empties it.">
+                            <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                                <TextBlock Text="Slot" FontSize="11" Foreground="#888888" VerticalAlignment="Center" Margin="0,0,3,0" />
+                                <ToggleButton x:Name="Slot1Button" Classes="slot" Tag="0" Content="1" Click="SlotButton_Click" />
+                                <ToggleButton x:Name="Slot2Button" Classes="slot" Tag="1" Content="2" Click="SlotButton_Click" />
+                                <ToggleButton x:Name="Slot3Button" Classes="slot" Tag="2" Content="3" Click="SlotButton_Click" />
+                            </StackPanel>
+                            <ComboBox x:Name="SlotTypeCombo" Width="128" FontSize="11" Padding="6,1"
+                                      SelectionChanged="SlotTypeCombo_SelectionChanged" />
                         </StackPanel>
 
                         <!-- the selected clip: one grid so labels and boxes line up across both lines -->

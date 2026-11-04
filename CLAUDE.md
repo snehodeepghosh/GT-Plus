@@ -136,6 +136,12 @@ images, UI aids, view state) stays in memory or preferences and is never written
   rest are items of `BarWrap` (picker+transport, storyboard commands, the clip grid, the direction pad) that wrap onto
   more lines as the panel narrows. `BarGrip` under it pulls the bar's height (38px up to what leaves `MinTrackHeight`
   for the track); double-click resets it to fit its contents. `OnSizeChanged` caps `BarHost.MaxHeight` the same way
+- **Transition slots** (`TimelinePanelControl`, `SlotPanel`): GT's 1/2/3 slot toggles + `SlotTypeCombo`. Slot N = the
+  object's Nth row on `TargetStoryboard`, placeholders included (`SlotRows`, ordinal name match like GT).
+  `SetSlot` mirrors GT's `GraphicsStoryboard.SetAnimationBuilderByIndex`: swap in place copying Delay/Duration/Reverse/
+  Interpolation/Speed (`GraphicsAnimationBuilder.CopyTo`), pad with `<None Object/>` placeholders to reach a later
+  slot, None writes a placeholder. Targets: objects of the selected clips, else the canvas selection. One undo step
+  (whole Animations list snapshot). `SlotsChanged` → `RefreshSlotUi`
 - **Timeline zoom**: `TimelinePanelControl.OnTrackWheel` (tunnel on `TrackScroller`) handles Cmd/Ctrl+wheel through
   `ZoomTimeline(factor, viewportX)`, which sets `ZoomSlider.Value` (→ `Track.PixelsPerSecond`) and shifts the scroll
   offset so the time under the pointer stays put (a pointer over the pinned gutter anchors at its edge)
