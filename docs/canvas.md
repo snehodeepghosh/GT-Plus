@@ -87,6 +87,8 @@ or height in that layer's coordinates are **not drawn at all** in GT or vMix.
   layer's frame. If the object reaches outside that frame, the frame **grows** just enough to cover it, so nothing is
   cut off. The frame never grows past the edge of the canvas (see below). The layer's other objects don't move on screen, and undo puts both the object and the frame back.
 - Holding **Option** over the line between two rows shows the clipping cursor; see [Masks](masks.md).
+- With a **layer** (group) selected, the **arrow keys** move it 1 px (Shift: the larger step from Preferences), one
+  undo step per run, the same as for objects.
 - With a **layer** (group) selected, **Cmd+D** duplicates it and **Delete** or **Backspace** deletes it, the same as
   the Home tab's Duplicate and Delete buttons. With objects selected they act on the objects. A copy of a layer with a
   number for a name ("2") gets the next free number ("4").

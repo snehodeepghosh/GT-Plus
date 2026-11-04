@@ -288,10 +288,26 @@ public partial class GtCanvasControl : Control
 
     private readonly Dictionary<GtElement, GtPoint> _nudgeOrigins = new(ReferenceEqualityComparer.Instance);
 
+    /// <summary>an open arrow-key run on a selected layer: the layer and where it started</summary>
+    private (GtLayer Layer, GtPoint Origin)? _layerNudge;
+
     /// <summary>moves the unlocked part of the element selection by a doc-space delta; consecutive nudges coalesce, <see cref="CommitNudge"/> closes the run and pushes it as one move so holding an arrow key costs a single undo step instead of one per repeat</summary>
     public bool NudgeSelection(double dx, double dy)
     {
-        if (IsPreviewing || _selectedElements.Count == 0) return false;
+        if (IsPreviewing) return false;
+
+        // a selected layer (group) moves as a whole, coalesced and committed the same way
+        if (_selectedElements.Count == 0 && _selectedLayer is { } layer)
+        {
+            if (layer.Locked) return false;
+            _layerNudge ??= (layer, layer.Location);
+            layer.Location = new GtPoint(layer.Location.X + dx, layer.Location.Y + dy);
+            InvalidateVisual();
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
+            return true;
+        }
+
+        if (_selectedElements.Count == 0) return false;
 
         bool moved = false;
         foreach (var el in _selectedElements)
@@ -311,6 +327,13 @@ public partial class GtCanvasControl : Control
     /// <summary>closes an open nudge run, recording it in history as a single move</summary>
     public void CommitNudge()
     {
+        if (_layerNudge is { } ln)
+        {
+            _layerNudge = null;
+            var after = ln.Layer.Location;
+            if (History is not null && (after.X != ln.Origin.X || after.Y != ln.Origin.Y))
+                History.Push(new MoveLayerAction(ln.Layer, ln.Origin, after));
+        }
         if (_nudgeOrigins.Count == 0) return;
 
         if (History is not null)

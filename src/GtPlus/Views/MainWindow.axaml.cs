@@ -996,7 +996,9 @@ public partial class MainWindow : Window
 
         if (GtCanvas.IsFreeTransforming) { GtCanvas.NudgeFreeTransform(dx, dy); return true; }
         if (!GtCanvas.NudgeSelection(dx, dy)) return false;
-        StatusText.Text = $"Moved {GtCanvas.SelectedElements.Count} element(s) by {dx:0.##}, {dy:0.##}";
+        StatusText.Text = GtCanvas.SelectedElements.Count == 0 && GtCanvas.SelectedLayer is { } movedLayer
+            ? $"Moved layer {movedLayer.Name} by {dx:0.##}, {dy:0.##}"
+            : $"Moved {GtCanvas.SelectedElements.Count} element(s) by {dx:0.##}, {dy:0.##}";
         return true;
     }
 
