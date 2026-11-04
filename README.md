@@ -7,7 +7,8 @@ Built with [Avalonia UI](https://avaloniaui.net/) - runs on Windows, macOS, and 
 
 ## Optimal GT Designer
 
-This fork is packaged as **Optimal GT Designer** by Optimal Studios. On top of GT Plus it adds:
+This fork is packaged as **Optimal GT Designer** by Optimal Studios. The full guide is in [docs/](docs/README.md).
+On top of GT Plus it adds:
 
 - a ribbon interface laid out like vMix GT Title Designer, with a dark theme
 - Photoshop import (File › Import PSD, or drop a `.psd`/`.psb` on the canvas): groups become layers, text stays
