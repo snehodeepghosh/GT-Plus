@@ -17,3 +17,4 @@ structures GT already has, and editor-only aids such as the reference image are 
 | [Timeline](timeline.md) | The Figma-style timeline, detaching it, the working area and the resizable bar |
 | [Canvas](canvas.md) | Drag-to-move and the canvas background |
 | [macOS](macos.md) | Shortcuts on a Mac, the app name and icon, building the `.app` |
+| [Platforms](platforms.md) | macOS, Windows and Linux packages, installing, and building them all |

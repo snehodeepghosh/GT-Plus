@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Optimal GT Designer
+GenericName=Title Designer
+Comment=Editor for vMix GT Title Designer titles (.gtzip)
+Exec=optimal-gt-designer %f
+Icon=optimal-gt-designer
+Terminal=false
+Categories=Graphics;AudioVideo;
+MimeType=application/x-gtzip;

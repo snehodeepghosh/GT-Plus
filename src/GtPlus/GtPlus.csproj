@@ -16,6 +16,12 @@
     <OutputType>WinExe</OutputType>
   </PropertyGroup>
 
+  <!-- the .exe's own icon (Explorer, taskbar pin); the SDK can only embed it when building on Windows, so builds made
+       elsewhere fall back to the window icon set at run time -->
+  <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
+    <ApplicationIcon>../../packaging/windows/AppIcon.ico</ApplicationIcon>
+  </PropertyGroup>
+
   <!-- Windows-only COM interop -->
   <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>

@@ -14,5 +14,10 @@
             </FluentTheme.Palettes>
         </FluentTheme>
         <StyleInclude Source="avares://GtPlus/Styles/Ribbon.axaml"/>
+        <!-- every window (main, detached timeline, dialogs) carries the app icon: the taskbar and Alt-Tab icon on Windows and
+             Linux. macOS ignores it and uses the bundle's AppIcon.icns -->
+        <Style Selector="Window">
+            <Setter Property="Icon" Value="/Assets/App/app-icon.png"/>
+        </Style>
     </Application.Styles>
 </Application>

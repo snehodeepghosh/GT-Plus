@@ -23,13 +23,21 @@ On top of GT Plus it adds:
 - a Figma-style timeline that can be detached onto another monitor, with the working area highlighted
 - drag-to-move on the canvas, a grid or black canvas background, and Cmd/Option shortcuts on macOS
 
-To build the Mac app (Apple Silicon) into `dist/macos`:
+To build every platform from one machine (macOS, Linux, or Windows with bash) into `dist/`:
 
 ```bash
-packaging/macos/build-mac.sh 0.1.30
+packaging/build-all.sh 0.1.42
 ```
 
-The app is ad-hoc signed, not notarized, so the first launch needs right-click › Open.
+| Package | Contents |
+| --- | --- |
+| `Optimal-GT-Designer-<v>-mac-arm64.zip` / `-mac-x64.zip` | `Optimal GT Designer.app` for Apple Silicon / Intel Macs |
+| `Optimal-GT-Designer-<v>-windows-x64.zip` / `-arm64.zip` | `Optimal GT Designer.exe` |
+| `Optimal-GT-Designer-<v>-linux-x64.tar.gz` / `-arm64.tar.gz` | `optimal-gt-designer`, icon, menu entry and `install.sh` |
+
+Every build is self-contained: nothing else (no .NET) needs installing on the target machine. Pass platform names to
+build only some, for example `packaging/build-all.sh 0.1.42 windows linux`. The Mac packages need a Mac (for
+`codesign`); see [docs/platforms.md](docs/platforms.md) for each platform's notes.
 
 ---
 

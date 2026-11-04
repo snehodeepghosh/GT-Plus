@@ -87,6 +87,13 @@ images, UI aids, view state) stays in memory or preferences and is never written
 - **`PlatformKeys.cs`** - `PlatformKeys.Command` is Cmd (`KeyModifiers.Meta`) on macOS and Ctrl elsewhere; every shortcut and modifier-drag checks it instead of `KeyModifiers.Control` (only the raw modifiers forwarded to web pages stay literal). Option already arrives as `Alt`. `Label()` / `LocalizeToolTips()` rewrite the Windows-style "Ctrl+Shift+N" tooltips as "⇧⌘N" on macOS, run once from `MainWindow.OnOpened`
 - **`Logger.cs`** - static logger
 
+### Packaging - `packaging/`
+- `build-all.sh [version] [mac|windows|linux...]` builds self-contained single-file packages into `dist/`: mac arm64/x64
+  `.app` zips (via `macos/build-mac.sh [version] [rid]`, needs macOS for codesign), windows x64/arm64 zips
+  (`Optimal GT Designer.exe`), linux x64/arm64 tar.gz (`optimal-gt-designer` + `.desktop` + png + `install.sh`)
+- Icons: `macos/AppIcon.icns` (bundle), `windows/AppIcon.ico` (embedded as ApplicationIcon only when building on
+  Windows, NETSDK1074 elsewhere), `src/GtPlus/Assets/App/app-icon.png` (every Window's Icon via a style in App.axaml)
+
 ### Controls - `src/GtPlus/Controls/`
 - **`GtCanvasControl.cs`** - main canvas; renders document, handles selection + move + resize
   - Enums: `CanvasTool { Select, Edit, TextBox, Rectangle, Ticker }`, `ResizeHandle { None, NW, N, NE, E, SE, S, SW, W }`
