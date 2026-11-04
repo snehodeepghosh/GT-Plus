@@ -67,7 +67,7 @@ images, UI aids, view state) stays in memory or preferences and is never written
 - **`FfmpegService.cs`** - locates the ffmpeg binary (prefs path → app dir → PATH → usual install dirs); can download the official Windows build into `%APPDATA%/GtPlus/ffmpeg`
 - **`VideoExportService.cs`** - MP4 export. Drives `GtCanvasControl.AnimationFrame` + `ExportToBitmap()` one frame at a time on the UI thread and pipes raw BGRA into ffmpeg's stdin via a bounded background writer
 - **`UpdateService.cs`** - `AppVersion.Current` (from the linked version.json resource) plus the GitHub `releases/latest` check and dotted-numeric version compare. Never downloads anything - a newer release only opens the release page
-- **`Models/GtSkew.cs`** - GT's Skew effect: `Get`/`Set` the first `Type=Skew` effect (0,0 removes it) and `Matrix()` for the shear. The canvas applies it in `RenderElementBodySkewed` (inside any mask clip) and to mask geometry in `BuildMaskGeometry`; the Effects tab's Skew group drives it through `WireCrop`. Hit-testing and selection handles still use the unskewed box
+- **`Models/GtSkew.cs`** - GT's Skew effect: `Get`/`Set` the first `Type=Skew` effect (0,0 removes it) and `Matrix()` for the shear. Sign: positive X = forward/italic lean, as GT/vMix draw it (the opposite of D2D/Avalonia `CreateSkew`, so `Matrix` negates both angles). The canvas applies it in `RenderElementBodySkewed` (inside any mask clip) and to mask geometry in `BuildMaskGeometry`; the Effects tab's Skew group drives it through `WireCrop`. Hit-testing and selection handles still use the unskewed box
 - **`Models/GtReplaceEffects.cs`** - `GtTextureFlip` (FlipX = "Horizontal", FlipY = "Vertical"), `GtReflection` (Finish stage, `Depth` = share of height the fade reaches) and `GtReplaceEffects.Matrix()`, which composes flips and skews in list order. The canvas draws through it in `RenderElementBodySkewed` (reflection first, via `RenderReflection`) and reshapes mask geometry with it
 - **`Psd/`** - PSD/PSB import, no third-party library. `PsdReader` decodes the file (header, ResolutionInfo, layer records
   with flags/opacity/fill opacity/lock/section dividers, channel data raw/RLE/ZIP, 8/16/32-bit, RGB/grey/CMYK, layer masks;
@@ -191,7 +191,7 @@ images, UI aids, view state) stays in memory or preferences and is never written
   the face drawn is the one vMix would pick. The Font group's weight menu (`RebuildWeights`) lists real faces with a
   sample; `ByPostScriptName` gives the PSD importer exact matches
 - **Fonts:** `ReplaceFontsWindow` (Home › Fonts) groups text by (family, weight, style) and rewrites those three
-  attributes, one undo step. The Font group's faux italic button sets Skew X = `FauxItalicAngle` (−10°, Photoshop's
+  attributes, one undo step. The Font group's faux italic button sets Skew X = `FauxItalicAngle` (+10°, Photoshop's
   measured slant) with `CenterOffset` on the first baseline
 - **PSD text transforms:** `TextTransform.Decompose` QR-splits the 2×2 into rotation (→ `RotateZ`), X shear (→ Skew) and
   scale (→ font size); faux italic adds −tan10°·sx/sy to the shear. The box is placed so `L = O − size/2 − T(a − size/2)`

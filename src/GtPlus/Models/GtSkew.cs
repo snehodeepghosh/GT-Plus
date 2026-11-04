@@ -53,8 +53,10 @@ public static class GtSkew
 
     /// <summary>
     /// the shear every skew effect in the list contributes, about the centre of <paramref name="bounds"/> plus each effect's
-    /// CenterOffset, composed in list order; identity when there is none. Same convention as D2D's Matrix3x2F::Skew:
-    /// a positive X angle pushes the bottom of the object right, a positive Y angle pushes its right side down
+    /// CenterOffset, composed in list order; identity when there is none. GT's convention, checked against vMix: a positive X
+    /// angle leans the object forward (its top goes right, like italic), so it is the opposite of D2D's Matrix3x2F::Skew and
+    /// of Avalonia's CreateSkew, and both angles are negated before building the shear. A positive Y angle likewise lifts the
+    /// right side
     /// </summary>
     public static Matrix Matrix(IReadOnlyList<GtEffect> effects, Rect bounds)
     {
@@ -69,7 +71,7 @@ public static class GtSkew
             double cx = bounds.Center.X + e.CenterOffset.X;
             double cy = bounds.Center.Y + e.CenterOffset.Y;
             m *= Avalonia.Matrix.CreateTranslation(-cx, -cy)
-               * Avalonia.Matrix.CreateSkew(ax, ay)
+               * Avalonia.Matrix.CreateSkew(-ax, -ay)
                * Avalonia.Matrix.CreateTranslation(cx, cy);
         }
         return m;

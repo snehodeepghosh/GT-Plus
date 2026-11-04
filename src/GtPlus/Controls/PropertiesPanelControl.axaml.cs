@@ -1042,8 +1042,8 @@ public partial class PropertiesPanelControl : UserControl
         Apply();
     }
 
-    /// <summary>Photoshop's faux italic slant; GT's skew X is positive when the bottom goes right, so an italic lean is negative</summary>
-    public const double FauxItalicAngle = -10;
+    /// <summary>Photoshop's faux italic slant; GT's skew X is positive for a forward (italic) lean</summary>
+    public const double FauxItalicAngle = 10;
 
     private static bool IsFauxItalic(GtTextBlock tb) => GtSkew.Get(tb) is var (x, y) && Math.Abs(x - FauxItalicAngle) < 0.01 && y == 0;
 

@@ -437,7 +437,8 @@ public static class PsdImporter
         if (transformed)
         {
             tb.RotateZ = Math.Round(xf.Rotation, 6);
-            if (Math.Abs(shear) > 1e-3) GtSkew.Set(tb, Math.Round(Math.Atan(shear) * 180 / Math.PI, 3), 0);
+            // GT's skew X is positive for a forward (italic) lean, which is a negative shear here
+            if (Math.Abs(shear) > 1e-3) GtSkew.Set(tb, Math.Round(-Math.Atan(shear) * 180 / Math.PI, 3), 0);
         }
         (double X, double Y) T(double x, double y)
         {

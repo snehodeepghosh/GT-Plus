@@ -10,6 +10,8 @@ The **Skew** group leans the object sideways (**X**) or up and down (**Y**), in 
 - The sliders cover −60° to 60°. The number boxes accept up to ±85°.
 - **Reset** sets both back to 0, which removes the effect.
 - The object leans about its centre, as in GT.
+- A **positive X** leans the object forward, its top to the right, like italic. A negative X leans it back. The
+  numbers mean the same as in GT's own Skew boxes.
 - A skewed mask object cuts a skewed shape.
 
 In the file: `<Effect Type="Skew" Mode="Replace" ... />`.
