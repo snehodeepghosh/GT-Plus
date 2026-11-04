@@ -53,4 +53,7 @@ Reveal) are measured against its frame, so they now play relative to the tighter
 - **Double-click** a layer or object row to rename it in place. **Enter** keeps the new name, **Esc** cancels, and
   clicking elsewhere keeps it. Right-click › Rename still works.
 - Rows show the normal arrow pointer. Drag a row up or down to reorder it.
+- Dragging an object into **another layer** keeps it where it is on screen: its position is converted to the new
+  layer's frame. A layer's frame still cuts off whatever lies outside it, so part of an object dropped outside the
+  new layer's frame is hidden until the frame covers it.
 - Holding **Option** over the line between two rows shows the clipping cursor; see [Masks](masks.md).

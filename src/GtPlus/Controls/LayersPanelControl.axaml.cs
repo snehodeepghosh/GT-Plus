@@ -307,11 +307,13 @@ public partial class LayersPanelControl : UserControl
         var doc          = _doc;
         var layersBefore = doc.Layers.ToList();
         var elemsBefore  = doc.Layers.ToDictionary(l => l, l => l.Elements.ToList());
+        var locsBefore   = doc.Layers.SelectMany(l => l.Elements).ToDictionary(e => e, e => e.Location);
 
         ApplyNewOrder(final);
 
         var layersAfter = doc.Layers.ToList();
         var elemsAfter  = doc.Layers.ToDictionary(l => l, l => l.Elements.ToList());
+        var locsAfter   = doc.Layers.SelectMany(l => l.Elements).ToDictionary(e => e, e => e.Location);
 
         var desc = _dragging.Kind == RowKind.Layer
             ? "Reorder Layers"
@@ -328,6 +330,7 @@ public partial class LayersPanelControl : UserControl
                     foreach (var el in elemsBefore[layer]) layer.Elements.Add(el);
                     doc.Layers.Add(layer);
                 }
+                foreach (var (el, loc) in locsBefore) el.Location = loc;
                 _canvas?.ClearSelection();
                 Populate(doc);
                 _canvas?.InvalidateVisual();
@@ -341,6 +344,7 @@ public partial class LayersPanelControl : UserControl
                     foreach (var el in elemsAfter[layer]) layer.Elements.Add(el);
                     doc.Layers.Add(layer);
                 }
+                foreach (var (el, loc) in locsAfter) el.Location = loc;
                 _canvas?.ClearSelection();
                 Populate(doc);
                 _canvas?.InvalidateVisual();
@@ -376,6 +380,17 @@ public partial class LayersPanelControl : UserControl
                 layerElements[currentLayer].Add(meta.Element!);
             }
         }
+
+        // an object's Location is relative to its layer, so one dropped into another layer is re-expressed against the new
+        // layer's position: it keeps its place on screen instead of jumping by the difference between the two frames
+        var ownerBefore = new Dictionary<GtElement, GtLayer>(ReferenceEqualityComparer.Instance);
+        foreach (var layer in _doc.Layers)
+            foreach (var el in layer.Elements) ownerBefore[el] = layer;
+        foreach (var (layer, elems) in layerElements)
+            foreach (var el in elems)
+                if (ownerBefore.TryGetValue(el, out var from) && !ReferenceEquals(from, layer))
+                    el.Location = new GtPoint(el.Location.X + from.Location.X - layer.Location.X,
+                                              el.Location.Y + from.Location.Y - layer.Location.Y);
 
         // visual order is top-to-bottom, model/render order is bottom-to-top
         _doc.Layers.Clear();
