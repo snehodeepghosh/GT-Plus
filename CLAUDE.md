@@ -214,6 +214,9 @@ images, UI aids, view state) stays in memory or preferences and is never written
   `PropertyChangeAction`), Esc/Cmd+Z cancels; selection/tool/preview changes and other commands commit first
   (`HandleFreeTransformKey`). `ArrowCursor(angle)`/`RotateCursor(angle)` are runtime-drawn Photoshop cursors cached per 10°;
   `HandleCursor` uses them for the ordinary resize handles too
+- **Duplicate/Delete target:** `MainWindow.DoDuplicateSelection`/`DoDeleteSelection` act on the layer when
+  `LayerIsSelected` (SelectedLayer set, no elements), else on elements; Cmd/Ctrl+D, Delete and Backspace use them, as do
+  the Home tab buttons. `NameService.NextCopyName` keeps counting for all-digit names
 - **Cut** (`MainWindow.DoCut` = `DoCopy` + `LayersPanel.DeleteElements`, refused if anything selected is locked): Cmd+X,
   Home › Clipboard `CutMenuItem`, and the row menu's Cut/Copy/Paste via `LayersPanel.CutRequested/CopyRequested/PasteRequested/CanPaste`.
   `DoPaste` keeps the original name when it is free (so a cut-paste comes back as itself), else `NextCopyName`

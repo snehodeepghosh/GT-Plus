@@ -41,7 +41,8 @@ public static class NameService
     public static string NextCopyName(HashSet<string> taken, string name)
     {
         SplitTrailingNumber(name, out var baseName, out var number);
-        if (baseName.Length == 0) baseName = "Element";
+        // a purely numeric name ("2", as GT layer groups often are) counts on as a number; only an empty name falls back to "Element"
+        if (baseName.Length == 0 && number is null) baseName = "Element";
         return UniqueName(taken, baseName, number is null ? 1 : number.Value + 1);
     }
 

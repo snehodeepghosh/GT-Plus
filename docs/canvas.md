@@ -87,6 +87,9 @@ or height in that layer's coordinates are **not drawn at all** in GT or vMix.
   layer's frame. If the object reaches outside that frame, the frame **grows** just enough to cover it, so nothing is
   cut off. The frame never grows past the edge of the canvas (see below). The layer's other objects don't move on screen, and undo puts both the object and the frame back.
 - Holding **Option** over the line between two rows shows the clipping cursor; see [Masks](masks.md).
+- With a **layer** (group) selected, **Cmd+D** duplicates it and **Delete** or **Backspace** deletes it, the same as
+  the Home tab's Duplicate and Delete buttons. With objects selected they act on the objects. A copy of a layer with a
+  number for a name ("2") gets the next free number ("4").
 - **Cut / Copy / Paste** are on an object row's right-click menu, on the Home tab's Clipboard group, and on
   Cmd+X / Cmd+C / Cmd+V (Ctrl on Windows). Cut copies the selected objects, with the animations aimed at them, and
   deletes them in one undo step. It is refused when any selected object or its layer is locked. Pasting after a cut

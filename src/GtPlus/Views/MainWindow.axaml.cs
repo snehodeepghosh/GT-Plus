@@ -376,10 +376,10 @@ public partial class MainWindow : Window
         DeleteLayerMenuItem.IsEnabled = (GtCanvas.Document?.Layers.Count ?? 0) > 1;
 
         bool hasElements = GtCanvas.SelectedElements.Count > 0;
-        DuplicateElementMenuItem.IsEnabled = hasElements;
+        DuplicateElementMenuItem.IsEnabled = hasElements || LayerIsSelected;
         CutMenuItem.IsEnabled              = hasElements;
         CopyMenuItem.IsEnabled             = hasElements;
-        DeleteElementMenuItem.IsEnabled    = hasElements;
+        DeleteElementMenuItem.IsEnabled    = hasElements || (LayerIsSelected && (GtCanvas.Document?.Layers.Count ?? 0) > 1);
 
         TimelinePanel.RefreshSelectionState();
     }
@@ -869,14 +869,15 @@ public partial class MainWindow : Window
                 _ = DoPasteAsync();
                 e.Handled = true;
                 break;
-            case Key.D when e.KeyModifiers == PlatformKeys.Command && e.Source is not TextBox:
-                DoDuplicateElements();
+            case Key.D when e.KeyModifiers == PlatformKeys.Command && !IsTextInputSource(e.Source):
+                DoDuplicateSelection();
                 e.Handled = true;
                 break;
-            case Key.Delete when e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox:
+            // Delete, and Backspace (the Mac keyboard's "delete" key)
+            case Key.Delete or Key.Back when e.KeyModifiers == KeyModifiers.None && !IsTextInputSource(e.Source):
                 // falls through to the canvas when the timeline has no clips selected
                 if (!_timelineIsActiveSurface || !TimelinePanel.DeleteSelectedClips())
-                    DoDeleteElements();
+                    DoDeleteSelection();
                 e.Handled = true;
                 break;
             // macOS redo is Shift+Cmd+Z; Cmd+Y keeps working for anyone used to the Windows key
@@ -1052,8 +1053,21 @@ public partial class MainWindow : Window
     }
 
     private void NewLayer_Click(object? sender, RoutedEventArgs e)       => DoNewLayer();
-    private void DuplicateElement_Click(object? sender, RoutedEventArgs e) => DoDuplicateElements();
-    private void DeleteElement_Click(object? sender, RoutedEventArgs e)    => DoDeleteElements();
+    private void DuplicateElement_Click(object? sender, RoutedEventArgs e) => DoDuplicateSelection();
+    private void DeleteElement_Click(object? sender, RoutedEventArgs e)    => DoDeleteSelection();
+
+    /// <summary>true when a whole layer (group) is selected rather than objects, so Duplicate/Delete act on the layer</summary>
+    private bool LayerIsSelected => GtCanvas.SelectedLayer is not null && GtCanvas.SelectedElements.Count == 0;
+
+    private void DoDuplicateSelection()
+    {
+        if (LayerIsSelected) DoDuplicateLayer(); else DoDuplicateElements();
+    }
+
+    private void DoDeleteSelection()
+    {
+        if (LayerIsSelected) DoDeleteLayer(); else DoDeleteElements();
+    }
 
     private void DoDuplicateElements()
     {
