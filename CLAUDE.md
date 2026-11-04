@@ -170,9 +170,11 @@ images, UI aids, view state) stays in memory or preferences and is never written
   cannot be recorded (perspective rotation uses a custom draw op). A mask object with `Visible=false` masks nothing.
   Only rendering changed - the file still stores just `<Mask Object="Name" />`
 - **Clipping (Layers panel):** `LayersPanelControl.ToggleClip` sets/clears `MaskObject` to the object below
-  (`ClipTargetFor`: the one below, or its base when that is clipped itself); Option-click on a row, or within 5px of its
-  top edge for the row above, and the row context menu call it. `ClipBaseOf` = the mask object when it sits below in the
-  same layer; such rows get the ↳ indent and their base an underline. Canvas `HitTest` skips a masked object where
+  (`ClipTargetFor`: the one below, or its base when that is clipped itself). Option-click on the line between two rows
+  (`ClipLineTarget`: within `ClipLineReach` of a row's bottom = this row, of its top = the row above) and the row context
+  menu call it; with Option held over such a line the row shows Photoshop's clip cursor (`MakeClipCursor`, crossed out
+  for release), refreshed on Option key down/up via top-level key handlers. `ClipBaseOf` = the mask object when it sits
+  below in the same layer; such rows get the bent-arrow indent (`ClipArrowPath`) and their base an underline. Canvas `HitTest` skips a masked object where
   `IsDrawnAt` (renders it into a 3×3 bitmap around the point) finds no alpha
 - **Reference image:** `GtCanvasControl.ReferenceImage/Visible/Opacity/Difference`, drawn by `RenderReference` above the
   layers and skipped in `_exportMode`; MainWindow's View › Reference group drives it (`SetReference`). After a PSD import

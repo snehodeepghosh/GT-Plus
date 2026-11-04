@@ -31,13 +31,16 @@ Only the drawing changed. Files are read and written exactly as before.
 You can clip objects the way you would in Photoshop. The Effects › Mask picker still works as before; both set the
 same GT mask.
 
-- **Option-click** (Alt-click on Windows) **between two rows** clips the upper object to the one below it.
-  Option-clicking a row clips that row's object to the one below it.
-- **Right-click › Create Clipping Mask** does the same. On a clipped object the item reads **Release Clipping Mask**.
-- Option-clicking a clipped object releases it.
+- **Hold Option** (Alt on Windows) and point at the line between two rows: the pointer turns into Photoshop's clipping
+  cursor, a bent arrow beside a white square. **Click** to clip the upper object to the one below it.
+- On the line above an object that is already clipped, the cursor is crossed out; clicking there **releases** it.
+- Option-clicking the middle of a row is an ordinary click, as in Photoshop.
+- **Right-click › Create Clipping Mask** clips the object to the one below it. On a clipped object the item reads
+  **Release Clipping Mask**.
 - As in Photoshop, clipping onto an object that is itself clipped uses that object's base, so a stack of clipped
   objects shares one base.
-- A clipped row is indented behind a **↳** arrow, and its base's name is underlined.
+- A clipped row is indented behind Photoshop's bent down-arrow, pointing at its base, and the base's name is
+  underlined.
 - Each change is one undo step.
 
 In the file a clipped object simply carries `<Mask Object="base" />`. An object counts as clipped when its mask

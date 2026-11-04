@@ -456,11 +456,13 @@ public partial class LayersPanelControl : UserControl
         var inner = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         inner.Children.Add(visBtn);
         inner.Children.Add(lockBtn);
+        // Photoshop's clipped row: indented, with its bent down-arrow pointing at the base below
         if (clipped)
-            inner.Children.Add(new TextBlock
+            inner.Children.Add(new Avalonia.Controls.Shapes.Path
             {
-                Text = "↳", FontSize = 13, Margin = new Thickness(8, -2, 0, 0),
-                Foreground = new SolidColorBrush(Color.Parse("#9ccdf5")), VerticalAlignment = VerticalAlignment.Center,
+                Data = Geometry.Parse(ClipArrowPath), Stroke = new SolidColorBrush(Color.Parse("#d0d0d0")),
+                StrokeThickness = 1.3, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round,
+                Width = 12, Height = 14, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
             });
         inner.Children.Add(nameBlock);
 
@@ -468,11 +470,23 @@ public partial class LayersPanelControl : UserControl
         {
             Background = Brushes.Transparent,
             Padding    = new Thickness(22, 2, 6, 2),
-            Cursor     = new Cursor(StandardCursorType.SizeNorthSouth),
+            Cursor     = RowCursor,
             Child      = inner,
         };
 
-        if (clipped) ToolTip.SetTip(rowBorder, $"Clipped to {ClipBaseOf(layer, element)!.Name} (Option-click to release)");
+        if (clipped) ToolTip.SetTip(rowBorder, $"Clipped to {ClipBaseOf(layer, element)!.Name} (Option-click the line above it to release)");
+
+        // with Option held over the line between two rows the pointer turns into Photoshop's clipping cursor
+        rowBorder.PointerMoved += (_, e) =>
+        {
+            _clipHover = (layer, element, rowBorder, e.GetPosition(rowBorder).Y);
+            UpdateClipCursor(e.KeyModifiers);
+        };
+        rowBorder.PointerExited += (_, _) =>
+        {
+            if (_clipHover?.Row == rowBorder) _clipHover = null;
+            rowBorder.Cursor = RowCursor;
+        };
 
         rowBorder.PointerPressed += (_, e) =>
         {
@@ -481,14 +495,11 @@ public partial class LayersPanelControl : UserControl
             if (_canvas is null) return;
             if (!e.GetCurrentPoint(rowBorder).Properties.IsLeftButtonPressed) return;
 
-            // Photoshop's Option-click (Alt on Windows) between two rows clips the upper one to the one below; on the
-            // line at the top of this row that is the row above, anywhere else it is this row
-            if (e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+            // Photoshop's Option-click (Alt on Windows) on the line between two rows clips the upper one to the one below,
+            // or releases it when it is clipped already; anywhere else on the row it is an ordinary click
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Alt) &&
+                ClipLineTarget(layer, element, e.GetPosition(rowBorder).Y, rowBorder.Bounds.Height) is { } target)
             {
-                var target = element;
-                int index = layer.Elements.IndexOf(element);
-                if (e.GetPosition(rowBorder).Y <= 5 && index + 1 < layer.Elements.Count)
-                    target = layer.Elements[index + 1];   // rows are listed top first, so the row above is the next element up
                 ToggleClip(layer, target);
                 e.Handled = true;
                 return;
@@ -893,6 +904,99 @@ public partial class LayersPanelControl : UserControl
     }
 
     // ── clipping masks ──────────────────────────────────────────────────
+
+    /// <summary>Photoshop's clipping arrow: a short hook at the top, a stem, and an arrowhead pointing down at the base</summary>
+    private const string ClipArrowPath = "M 10,2 L 4,2 L 4,12 M 1.5,9.5 L 4,12.5 L 6.5,9.5";
+
+    /// <summary>how close to a row's top or bottom edge counts as the line between two rows</summary>
+    private const double ClipLineReach = 6;
+
+    private static readonly Cursor RowCursor = new(StandardCursorType.SizeNorthSouth);
+    private static Cursor? _clipCursor, _releaseCursor;
+    private (GtLayer Layer, GtElement Element, Border Row, double Y)? _clipHover;
+
+    /// <summary>
+    /// the object an Option-click at <paramref name="y"/> on this row would clip or release: on the line at the bottom of the
+    /// row it is this row (clipped to the row below), on the line at the top it is the row above (clipped to this one); null
+    /// in the middle of the row or where there is no row on the other side of the line in the same layer
+    /// </summary>
+    private static GtElement? ClipLineTarget(GtLayer layer, GtElement element, double y, double height)
+    {
+        int index = layer.Elements.IndexOf(element);   // rows are listed top first, so the row above is index + 1
+        if (y >= height - ClipLineReach && index > 0) return element;
+        if (y <= ClipLineReach && index + 1 < layer.Elements.Count) return layer.Elements[index + 1];
+        return null;
+    }
+
+    private void UpdateClipCursor(KeyModifiers modifiers)
+    {
+        if (_clipHover is not { } h) return;
+        var target = modifiers.HasFlag(KeyModifiers.Alt) ? ClipLineTarget(h.Layer, h.Element, h.Y, h.Row.Bounds.Height) : null;
+        h.Row.Cursor = target is null ? RowCursor
+                     : ClipBaseOf(h.Layer, target) is not null ? ReleaseCursor() : ClipCursor();
+    }
+
+    /// <summary>Photoshop's clipping cursor, a bent down-arrow beside a white square; the release cursor crosses it out</summary>
+    private static Cursor ClipCursor()    => _clipCursor    ??= MakeClipCursor(release: false);
+    private static Cursor ReleaseCursor() => _releaseCursor ??= MakeClipCursor(release: true);
+
+    private static Cursor MakeClipCursor(bool release)
+    {
+        try
+        {
+            const int size = 32;
+            var rtb = new RenderTargetBitmap(new PixelSize(size, size), new Vector(96, 96));
+            using (var ctx = rtb.CreateDrawingContext())
+            {
+                var arrow = Geometry.Parse("M 13,5 L 7,5 L 7,19 M 3.5,15 L 7,19.5 L 10.5,15");
+                // white halo first so the black arrow reads on any background, as the system cursors do
+                ctx.DrawGeometry(null, new Pen(Brushes.White, 4, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), arrow);
+                ctx.DrawGeometry(null, new Pen(Brushes.Black, 1.8, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), arrow);
+                var square = new Rect(15.5, 11.5, 9, 9);
+                ctx.DrawRectangle(Brushes.White, new Pen(Brushes.Black, 1.2), square);
+                if (release)
+                {
+                    ctx.DrawLine(new Pen(Brushes.White, 4, lineCap: PenLineCap.Round), new Point(3, 22), new Point(14, 3));
+                    ctx.DrawLine(new Pen(Brushes.Black, 1.8, lineCap: PenLineCap.Round), new Point(3, 22), new Point(14, 3));
+                }
+            }
+            return new Cursor(rtb, new PixelPoint(7, 12));
+        }
+        catch
+        {
+            return new Cursor(StandardCursorType.Hand);
+        }
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        // pressing or letting go of Option without moving the pointer still swaps the cursor, as in Photoshop
+        if (TopLevel.GetTopLevel(this) is { } top)
+        {
+            top.AddHandler(KeyDownEvent, OnTopLevelKey, RoutingStrategies.Tunnel, handledEventsToo: true);
+            top.AddHandler(KeyUpEvent,   OnTopLevelKey, RoutingStrategies.Tunnel, handledEventsToo: true);
+        }
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this) is { } top)
+        {
+            top.RemoveHandler(KeyDownEvent, OnTopLevelKey);
+            top.RemoveHandler(KeyUpEvent,   OnTopLevelKey);
+        }
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void OnTopLevelKey(object? sender, KeyEventArgs e)
+    {
+        // the event's own modifiers lag the key that changed them, so Option is read from the key itself
+        var mods = e.KeyModifiers;
+        if (e.Key is Key.LeftAlt or Key.RightAlt)
+            mods = e.RoutedEvent == KeyDownEvent ? mods | KeyModifiers.Alt : mods & ~KeyModifiers.Alt;
+        UpdateClipCursor(mods);
+    }
     // Photoshop's clipping mask expressed with GT's own mask: a clipped object's <Mask Object> names its base. Nothing new
     // is written to the file; "clipped" is simply a mask whose object sits below the masked one in the same layer
 
