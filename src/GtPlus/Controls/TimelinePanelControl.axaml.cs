@@ -642,6 +642,12 @@ public partial class TimelinePanelControl : UserControl
         ToolTip.SetTip(LoopButton, "Loop playback");
     }
 
+    /// <summary>where playback stops (or loops): the end of the last animation, the same length the time readout shows. The
+    /// track itself draws a second of empty space past that so the last keyframe isn't jammed against the edge, but
+    /// playing through it only showed nothing happening. A Continuous storyboard never ends, so it loops over the drawn span</summary>
+    private double PlaybackEnd =>
+        _view?.AlwaysLoops == true || ViewDuration <= 0 ? Track.TimelineLength : ViewDuration;
+
     public void TogglePlay()
     {
         if (_playing) Pause();
@@ -656,7 +662,7 @@ public partial class TimelinePanelControl : UserControl
         PreviewEnabled = true;
 
         // restarting from the end feels like a replay rather than a no-op
-        if (Track.CurrentTime >= Track.TimelineLength - 1e-3) SetTime(0);
+        if (Track.CurrentTime >= PlaybackEnd - 1e-3) SetTime(0);
 
         _playing       = true;
         _playStartTime = Track.CurrentTime;
@@ -685,7 +691,7 @@ public partial class TimelinePanelControl : UserControl
         // wall-clock driven rather than tick-counted, so a dropped frame does not slow playback
         double elapsed = (DateTime.UtcNow - _playAnchor).TotalSeconds;
         double t       = _playStartTime + elapsed;
-        double length  = Track.TimelineLength;
+        double length  = PlaybackEnd;
 
         if (t >= length)
         {

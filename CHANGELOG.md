@@ -4,6 +4,12 @@ Optimal GT Designer is a fork of [GT Plus](https://github.com/Coow/GT-Plus) 0.1.
 on this fork, from the first update onwards. Throughout, titles stay plain vMix GT files: no feature changes how a
 `.gtzip` is written or how vMix reads it, and editor-only aids are never saved into the file.
 
+## 0.1.56 — 5 November 2026
+
+### Fixes
+- **Playback stops at the end of the animation.** The playhead used to run on for an extra second of empty track
+  (to 2.12 s for a 1.12 s storyboard) before stopping or looping. Continuous storyboards still loop as before.
+
 ## 0.1.55 — 5 November 2026
 
 ### Timeline
