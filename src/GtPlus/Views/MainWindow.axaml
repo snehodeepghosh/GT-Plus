@@ -281,7 +281,7 @@
                             <TextBlock Classes="caption" DockPanel.Dock="Bottom" Text="Reference"/>
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <ToggleButton x:Name="ReferenceShowButton" Classes="rb lg" IsEnabled="False"
-                                              ToolTip.Tip="Lay the original design over the title to check it matches. After a PSD import this is Photoshop's own preview of the file. Never saved into the title"
+                                              ToolTip.Tip="Lay the original design over the title to check it matches (Ctrl+Shift+R). After a PSD import this is Photoshop's own preview of the file. Never saved into the title"
                                               Click="ReferenceShow_Click">
                                     <StackPanel>
                                         <Path Classes="ic" Data="M 3,5 L 15,5 L 15,15 L 3,15 Z M 9,9 L 21,9 L 21,19 L 9,19 Z"/>

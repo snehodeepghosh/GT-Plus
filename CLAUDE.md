@@ -223,7 +223,7 @@ images, UI aids, view state) stays in memory or preferences and is never written
 - **Reference image:** `GtCanvasControl.ReferenceImage/Visible/Opacity/Difference`, drawn by `RenderReference` above the
   layers and skipped in `_exportMode`; MainWindow's View › Reference group drives it (`SetReference`). After a PSD import
   it is `PsdImportResult.ReferencePng`, from `PsdFile.Composite` (the image data section, read by
-  `PsdReader.ReadComposite`). Never written to the file
+  `PsdReader.ReadComposite`). Never written to the file. Cmd/Ctrl+Shift+R toggles `ReferenceShowButton` (no-op until a reference is loaded)
 - **Font faces:** `Services/FontFaces.cs` lists a family's faces with their *true* weight (OS/2 usWeightClass, what
   DirectWrite/vMix matches) and the platform's reported weight (CoreText on macOS gives e.g. 947 for a Black). `Pick`
   applies the CSS/DirectWrite matching rule on true weights; `FontFaces.Typeface(...)` is what every text draw uses, so

@@ -913,6 +913,17 @@ public partial class MainWindow : Window
                 SetRulersVisible(!TopRuler.IsVisible);
                 e.Handled = true;
                 break;
+            // the reference overlay, like the View › Reference button; does nothing until a reference image is loaded
+            case Key.R when e.KeyModifiers == (PlatformKeys.Command | KeyModifiers.Shift):
+                if (ReferenceShowButton.IsEnabled)
+                {
+                    ReferenceShowButton.IsChecked = ReferenceShowButton.IsChecked != true;
+                    ReferenceShow_Click(this, new RoutedEventArgs());
+                    StatusText.Text = GtCanvas.ReferenceVisible ? "Reference shown" : "Reference hidden";
+                }
+                else StatusText.Text = "No reference image loaded (View › Reference › Load)";
+                e.Handled = true;
+                break;
             case Key.OemSemicolon when e.KeyModifiers == PlatformKeys.Command:
                 ShowGuidesMenuItem.IsChecked = !(ShowGuidesMenuItem.IsChecked == true);
                 ToggleShowGuides_Click(this, new RoutedEventArgs());

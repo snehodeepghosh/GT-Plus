@@ -3,7 +3,7 @@
 **View › Reference** lays a picture of the original design over the title, so you can check the build matches it.
 
 - **After a PSD import** the reference is Photoshop's own flattened preview of the file, loaded automatically.
-  Press **Reference** to show it.
+  Press **Reference** to show it, or press **Cmd+Shift+R** (Ctrl+Shift+R on Windows) to turn it on and off.
 - **Load image…** uses any PNG, JPEG, BMP, WebP or GIF instead. It is stretched to the canvas size.
 - **Opacity**: the slider sets how strongly the reference shows (50% by default).
 - **Difference**: wherever the title matches the reference the canvas goes black, so any mismatch lights up. It
