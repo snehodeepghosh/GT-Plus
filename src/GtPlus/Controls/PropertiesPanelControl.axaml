@@ -779,6 +779,20 @@
                                           SelectionChanged="AnchorBox_SelectionChanged"/>
                             </DockPanel>
                         </Border>
+
+                        <!-- layer frame: never disabled, it acts on the selected layer or on the layers of the selected objects -->
+                        <Border Classes="group">
+                            <DockPanel>
+                                <TextBlock Classes="caption" DockPanel.Dock="Bottom" Text="Layer"/>
+                                <Button x:Name="FitLayerToVisibleButton" Classes="rb lg" Click="FitLayerToVisible_Click"
+                                        ToolTip.Tip="Fit to visible area: shrinks the layer's frame to exactly what its contents draw (transparent pixels and anything a mask cuts away don't count), and moves the contents so nothing shifts on screen. Acts on the selected layer, or on the layers of the selected objects">
+                                    <StackPanel>
+                                        <Path Classes="ic" Data="M 3,3 L 21,3 L 21,21 L 3,21 Z M 8,8 L 16,8 L 16,16 L 8,16 Z M 3,3 L 8,8 M 21,3 L 16,8 M 21,21 L 16,16 M 3,21 L 8,16"/>
+                                        <TextBlock Text="Fit to visible"/>
+                                    </StackPanel>
+                                </Button>
+                            </DockPanel>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
 

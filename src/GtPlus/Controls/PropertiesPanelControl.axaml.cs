@@ -797,6 +797,12 @@ public partial class PropertiesPanelControl : UserControl
         Apply();
     }
 
+    /// <summary>Format › Layer › Fit to visible; the window owns the canvas and the history, so it does the work</summary>
+    public event EventHandler? FitLayerToVisibleRequested;
+
+    private void FitLayerToVisible_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+        FitLayerToVisibleRequested?.Invoke(this, EventArgs.Empty);
+
     private void Apply()
     {
         if (_updating || _currentElement is null) return;

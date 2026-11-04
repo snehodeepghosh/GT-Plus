@@ -203,5 +203,9 @@ images, UI aids, view state) stays in memory or preferences and is never written
   scale (→ font size); faux italic adds −tan10°·sx/sy to the shear. The box is placed so `L = O − size/2 − T(a − size/2)`
   with T = R·S about the centre. The canvas applies a Replace-stage reshape *before* Z rotation, as GT does
   (`RenderElementBodySkewed` conjugates it by the rotation)
+- **Fit to visible (Format › Layer):** `GtCanvasControl.VisibleContentBounds(layer)` renders the layer's visible objects
+  (export mode, at rest) into a frame-sized bitmap and returns the alpha bounding box in doc space;
+  `MainWindow.FitLayerToVisible` floors/ceils it to whole pixels, moves/resizes the layer (keeping any Inner/Dimensions
+  ratio) and shifts its elements the opposite way, one undo step. Verified pixel-identical on the Waiting Lobby import
 - **Canvas background:** View tab › Background switches `CanvasBackground` between Grid and Solid (Black also resets `CanvasSolidColor` to black); Preferences edits the colours and grid size.
 - **No XAML bindings for file menu** - built entirely in `RebuildFileMenu()` C# code because recent files are dynamic.

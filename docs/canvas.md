@@ -34,6 +34,20 @@ opposite side moves out, or in, by the same amount, so the object stays centred 
 
 The grid's colours and size and the solid colour can be changed in Preferences.
 
+## Fit a layer to its visible area
+
+**Format › Layer › Fit to visible** shrinks a layer's frame to exactly what its contents draw:
+
+- **What counts:** only drawn pixels. Transparent parts of images, and anything a mask or clipping cuts away, are
+  left out. Shadows and glows are included.
+- **Nothing moves:** the frame moves and resizes, and the contents move the other way, so nothing shifts on screen.
+- **Which layers:** the selected layer, or every layer holding a selected object.
+- **Locked layers** are skipped. The whole fit is one undo step.
+
+Only content inside the current frame counts, since that is all the layer shows. It only changes the layer's
+position and size and its objects' positions, all ordinary GT values. Animations on the layer itself (Fly, Zoom,
+Reveal) are measured against its frame, so they now play relative to the tighter frame.
+
 ## Layers panel
 
 - **Double-click** a layer or object row to rename it in place. **Enter** keeps the new name, **Esc** cancels, and

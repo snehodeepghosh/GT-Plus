@@ -71,6 +71,7 @@ public partial class MainWindow : Window
 
         LayersPanel.Canvas  = GtCanvas;
         LayersPanel.History = _history;
+        PropertiesPanel.FitLayerToVisibleRequested += (_, _) => FitLayerToVisible();
         LayersPanel.DocumentChanged += (_, _) =>
         {
             TimelinePanel.Populate(GtCanvas.Document);
@@ -2512,6 +2513,81 @@ public partial class MainWindow : Window
             StatusText.Text = $"Reference: {Path.GetFileName(path)} (stretched to the canvas, not saved into the title)";
         }
         catch (Exception ex) { StatusText.Text = $"Could not load the reference: {ex.Message}"; }
+    }
+
+    /// <summary>
+    /// Format › Layer › Fit to visible: the selected layer (or every layer holding a selected object) gets a frame that just
+    /// holds what its contents draw, and its contents move by the opposite amount so nothing moves on screen. Only the
+    /// layer's own Location/Dimensions/InnerWidth/InnerHeight and its objects' Locations change, all ordinary GT values
+    /// </summary>
+    private void FitLayerToVisible()
+    {
+        var doc = GtCanvas.Document;
+        if (doc is null) return;
+        if (GtCanvas.IsPreviewing) { StatusText.Text = "Fit to visible: switch the storyboard preview off first"; return; }
+
+        var layers = new List<GtLayer>();
+        if (GtCanvas.SelectedLayer is { } selected) layers.Add(selected);
+        else
+            foreach (var layer in doc.Layers)
+                if (layer.Elements.Any(e => GtCanvas.SelectedElements.Contains(e))) layers.Add(layer);
+        if (layers.Count == 0) { StatusText.Text = "Fit to visible: select a layer, or an object in it"; return; }
+
+        var changes = new List<(GtLayer Layer, GtPoint Loc, GtSize Dim, double IW, double IH, GtPoint NewLoc, GtSize NewDim, double NewIW, double NewIH, double Dx, double Dy)>();
+        var skipped = new List<string>();
+        foreach (var layer in layers)
+        {
+            if (layer.Locked) { skipped.Add($"{layer.Name} (locked)"); continue; }
+            if (GtCanvas.VisibleContentBounds(layer) is not { } box) { skipped.Add($"{layer.Name} (draws nothing)"); continue; }
+
+            // whole pixels, never cutting into the content
+            double x0 = Math.Floor(box.X), y0 = Math.Floor(box.Y);
+            double x1 = Math.Ceiling(box.Right), y1 = Math.Ceiling(box.Bottom);
+            var newLoc = new GtPoint(x0, y0);
+            var newDim = new GtSize(x1 - x0, y1 - y0);
+            double dx = x0 - layer.Location.X, dy = y0 - layer.Location.Y;
+            if (dx == 0 && dy == 0 && newDim == layer.Dimensions) continue;
+
+            // a frame whose inner composition is sized differently keeps that ratio
+            double sx = layer.Dimensions.Width  > 0 && layer.InnerWidth  > 0 ? layer.InnerWidth  / layer.Dimensions.Width  : 1;
+            double sy = layer.Dimensions.Height > 0 && layer.InnerHeight > 0 ? layer.InnerHeight / layer.Dimensions.Height : 1;
+            changes.Add((layer, layer.Location, layer.Dimensions, layer.InnerWidth, layer.InnerHeight,
+                         newLoc, newDim, Math.Round(newDim.Width * sx, 3), Math.Round(newDim.Height * sy, 3), dx, dy));
+        }
+
+        if (changes.Count == 0)
+        {
+            StatusText.Text = skipped.Count > 0 ? $"Fit to visible: nothing to change ({string.Join(", ", skipped)})"
+                                                : "Fit to visible: the frame already fits";
+            return;
+        }
+
+        void Apply(bool forward)
+        {
+            foreach (var c in changes)
+            {
+                c.Layer.Location    = forward ? c.NewLoc : c.Loc;
+                c.Layer.Dimensions  = forward ? c.NewDim : c.Dim;
+                c.Layer.InnerWidth  = forward ? c.NewIW  : c.IW;
+                c.Layer.InnerHeight = forward ? c.NewIH  : c.IH;
+                double sign = forward ? -1 : 1;
+                foreach (var el in c.Layer.Elements)
+                    el.Location = new GtPoint(el.Location.X + sign * c.Dx, el.Location.Y + sign * c.Dy);
+            }
+            GtCanvas.InvalidateVisual();
+            UpdateRulerSelection();
+            RefreshPropertiesPanel();
+        }
+
+        Apply(true);
+        _history.Push(new PropertyChangeAction(
+            changes.Count == 1 ? $"Fit {changes[0].Layer.Name} to visible area" : $"Fit {changes.Count} layers to visible area",
+            undo: () => Apply(false), redo: () => Apply(true)));
+        var c0 = changes[0];
+        StatusText.Text = changes.Count == 1
+            ? $"Fitted {c0.Layer.Name} to its visible area: {c0.NewDim.Width:0}×{c0.NewDim.Height:0} at {c0.NewLoc.X:0},{c0.NewLoc.Y:0}"
+            : $"Fitted {changes.Count} layers to their visible area";
+        if (skipped.Count > 0) StatusText.Text += $"  ·  skipped {string.Join(", ", skipped)}";
     }
 
     /// <summary>Home › Fonts › Replace fonts: swaps fonts in bulk, as one undo step; only the family, weight and style attributes every text object already has are touched</summary>

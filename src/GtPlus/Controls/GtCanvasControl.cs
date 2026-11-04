@@ -1586,6 +1586,62 @@ public class GtCanvasControl : Control
     }
 
     /// <summary>
+    /// the box, in document coordinates, holding every pixel the layer's contents actually draw inside its current frame:
+    /// each visible object is drawn as the canvas draws it (masks, crops, effects, transparent bitmap areas) into a bitmap
+    /// and the box is read off its alpha. Null when nothing visible is drawn. Done at rest, never mid-preview
+    /// </summary>
+    public Rect? VisibleContentBounds(GtLayer layer)
+    {
+        if (_document is null || IsPreviewing) return null;
+        var frame = LayerBounds(layer);
+        int w = (int)Math.Ceiling(frame.Width), h = (int)Math.Ceiling(frame.Height);
+        if (w <= 0 || h <= 0) return null;
+
+        var nameMap = new Dictionary<string, GtElement>(StringComparer.OrdinalIgnoreCase);
+        foreach (var e in layer.Elements)
+            if (!string.IsNullOrEmpty(e.Name)) nameMap[e.Name] = e;
+
+        bool wasExport = _exportMode;
+        _exportMode = true;   // no selection chrome, no overflow tint
+        try
+        {
+            using var rtb = new RenderTargetBitmap(new PixelSize(w, h), new Vector(96, 96));
+            using (var ctx = rtb.CreateDrawingContext())
+            using (ctx.PushTransform(Matrix.CreateTranslation(layer.Location.X - frame.X, layer.Location.Y - frame.Y)))
+            {
+                var localCanvas = new Rect(-layer.Location.X, -layer.Location.Y, _document.Width, _document.Height);
+                foreach (var el in layer.Elements)
+                    if (el.Visible) RenderElement(ctx, el, localCanvas, null, nameMap);
+            }
+
+            var px = new byte[w * h * 4];
+            var handle = GCHandle.Alloc(px, GCHandleType.Pinned);
+            try { rtb.CopyPixels(new PixelRect(0, 0, w, h), handle.AddrOfPinnedObject(), px.Length, w * 4); }
+            finally { handle.Free(); }
+
+            int minX = w, minY = h, maxX = -1, maxY = -1;
+            for (int y = 0; y < h; y++)
+            {
+                int row = y * w * 4;
+                for (int x = 0; x < w; x++)
+                {
+                    if (px[row + x * 4 + 3] < 3) continue;   // a whisper of anti-aliasing is not content
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+            if (maxX < 0) return null;
+            return new Rect(frame.X + minX, frame.Y + minY, maxX - minX + 1, maxY - minY + 1);
+        }
+        finally
+        {
+            _exportMode = wasExport;
+        }
+    }
+
+    /// <summary>
     /// true when <paramref name="el"/> puts any visible pixel within a pixel of <paramref name="docPoint"/>: the object is
     /// drawn exactly as the canvas draws it - mask, crop, effects and all - into a tiny bitmap around the point and its
     /// alpha is read back
