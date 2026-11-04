@@ -926,6 +926,13 @@ public partial class LayersPanelControl : UserControl
         var clip = new MenuItem { Header = "Create Clipping Mask" };
         clip.Click += (_, _) => ToggleClip(layer, element);
 
+        var cut = new MenuItem { Header = "Cut", InputGesture = new Avalonia.Input.KeyGesture(Avalonia.Input.Key.X, PlatformKeys.Command) };
+        cut.Click += (_, _) => CutRequested?.Invoke();
+        var copy = new MenuItem { Header = "Copy", InputGesture = new Avalonia.Input.KeyGesture(Avalonia.Input.Key.C, PlatformKeys.Command) };
+        copy.Click += (_, _) => CopyRequested?.Invoke();
+        var paste = new MenuItem { Header = "Paste", InputGesture = new Avalonia.Input.KeyGesture(Avalonia.Input.Key.V, PlatformKeys.Command) };
+        paste.Click += (_, _) => PasteRequested?.Invoke();
+
         var copyAttributes = new MenuItem { Header = "Copy Attributes" };
         copyAttributes.Click += (_, _) => CopyAttributes(element);
         var pasteAttributes = new MenuItem { Header = "Paste Attributes" };
@@ -933,6 +940,10 @@ public partial class LayersPanelControl : UserControl
 
         var menu = new ContextMenu();
         menu.Items.Add(rename);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(cut);
+        menu.Items.Add(copy);
+        menu.Items.Add(paste);
         menu.Items.Add(new Separator());
         menu.Items.Add(duplicate);
         menu.Items.Add(delete);
@@ -960,6 +971,11 @@ public partial class LayersPanelControl : UserControl
             duplicate.IsEnabled = count > 0;
             // a locked element is immovable everywhere else, so it is not deletable either
             delete.IsEnabled    = DeletableSelection().Count > 0;
+
+            // Cut deletes, so it needs every selected object deletable; Copy works on anything selected
+            cut.IsEnabled   = CutRequested is not null && count > 0 && DeletableSelection().Count == count;
+            copy.IsEnabled  = CopyRequested is not null && count > 0;
+            paste.IsEnabled = PasteRequested is not null && CanPaste?.Invoke() == true;
 
             pasteAttributes.IsEnabled = _copiedAttributes is not null && DeletableSelection().Count > 0;
             pasteAttributes.Header    = "Paste Attributes" + (count > 1 ? $" to {count} Elements" : "");
@@ -1185,6 +1201,12 @@ public partial class LayersPanelControl : UserControl
 
     /// <summary>host hook: true when an ImageSequence clip can be added for this element right now, which needs a storyboard on the timeline to hold it</summary>
     public Func<GtElement, bool>? CanAddSequenceAnimation { get; set; }
+
+    /// <summary>host hooks for the row menu's Cut / Copy / Paste, which use the window's clipboard</summary>
+    public Action? CutRequested { get; set; }
+    public Action? CopyRequested { get; set; }
+    public Action? PasteRequested { get; set; }
+    public Func<bool>? CanPaste { get; set; }
 
     /// <summary>host hook: add an ImageSequence clip for this element and open the length helper</summary>
     public Action<GtElement>? AddSequenceAnimationRequested { get; set; }

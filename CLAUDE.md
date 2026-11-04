@@ -207,6 +207,9 @@ images, UI aids, view state) stays in memory or preferences and is never written
   for release), refreshed on Option key down/up via top-level key handlers. `ClipBaseOf` = the mask object when it sits
   below in the same layer; such rows get the bent-arrow indent (`ClipArrowPath`) and their base an underline. Canvas `HitTest` skips a masked object where
   `IsDrawnAt` (renders it into a 3×3 bitmap around the point) finds no alpha
+- **Cut** (`MainWindow.DoCut` = `DoCopy` + `LayersPanel.DeleteElements`, refused if anything selected is locked): Cmd+X,
+  Home › Clipboard `CutMenuItem`, and the row menu's Cut/Copy/Paste via `LayersPanel.CutRequested/CopyRequested/PasteRequested/CanPaste`.
+  `DoPaste` keeps the original name when it is free (so a cut-paste comes back as itself), else `NextCopyName`
 - **Copy/Paste Attributes** (Layers row menu, `LayersPanelControl.CopyAttributes`/`PasteAttributes`): static
   `_copiedAttributes` = anchor X/Y, Z, RotateX/Y/Z, Width/Height/Depth (the Format tab's Location/Rotate/Dimensions).
   Paste sets size first then `SetAnchorX/Y` on every unlocked selected element; one undo step restoring raw Location

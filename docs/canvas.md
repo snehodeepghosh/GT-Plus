@@ -57,6 +57,11 @@ Reveal) are measured against its frame, so they now play relative to the tighter
   layer's frame. If the object reaches outside that frame, the frame **grows** just enough to cover it, so nothing is
   cut off. The layer's other objects don't move on screen, and undo puts both the object and the frame back.
 - Holding **Option** over the line between two rows shows the clipping cursor; see [Masks](masks.md).
+- **Cut / Copy / Paste** are on an object row's right-click menu, on the Home tab's Clipboard group, and on
+  Cmd+X / Cmd+C / Cmd+V (Ctrl on Windows). Cut copies the selected objects, with the animations aimed at them, and
+  deletes them in one undo step. It is refused when any selected object or its layer is locked. Pasting after a cut
+  brings the objects back under their own names, so their animations still match; pasting a copy while the original
+  is still there names it like a duplicate.
 - **Right-click › Copy Attributes** remembers an object's Format values: Location X/Y/Z, Rotate X/Y/Z and
   Width/Height/Depth. **Right-click › Paste Attributes** gives those values to every selected, unlocked object, as
   one undo step. X/Y are the numbers the Format tab shows, so they are measured at each object's own anchor point;

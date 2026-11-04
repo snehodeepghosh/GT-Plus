@@ -138,6 +138,12 @@ public partial class MainWindow : Window
 
         LayersPanel.ConvertToDataDrivenColorRequested = ConvertToDataDrivenColor;
 
+        // the row menu's clipboard items use the window's clipboard, the same one Cmd+X/C/V and the Home tab use
+        LayersPanel.CutRequested   = DoCut;
+        LayersPanel.CopyRequested  = DoCopy;
+        LayersPanel.PasteRequested = () => _ = DoPasteAsync();
+        LayersPanel.CanPaste       = () => _clipboard.Count > 0;
+
         HistoryPanel.History = _history;
         PropertiesPanel.History = _history;
         _history.Changed += OnHistoryChanged;
@@ -371,6 +377,8 @@ public partial class MainWindow : Window
 
         bool hasElements = GtCanvas.SelectedElements.Count > 0;
         DuplicateElementMenuItem.IsEnabled = hasElements;
+        CutMenuItem.IsEnabled              = hasElements;
+        CopyMenuItem.IsEnabled             = hasElements;
         DeleteElementMenuItem.IsEnabled    = hasElements;
 
         TimelinePanel.RefreshSelectionState();
@@ -845,6 +853,10 @@ public partial class MainWindow : Window
                 break;
             case Key.Z when e.KeyModifiers == PlatformKeys.Command:
                 DoUndo();
+                e.Handled = true;
+                break;
+            case Key.X when e.KeyModifiers == PlatformKeys.Command && e.Source is not TextBox:
+                DoCut();
                 e.Handled = true;
                 break;
             case Key.C when e.KeyModifiers == PlatformKeys.Command && e.Source is not TextBox:
@@ -2134,6 +2146,22 @@ public partial class MainWindow : Window
     private readonly List<ClipboardEntry> _clipboard = new();
 
     private void Copy_Click(object? sender, RoutedEventArgs e) => DoCopy();
+    private void Cut_Click(object? sender, RoutedEventArgs e) => DoCut();
+
+    /// <summary>Cut = Copy then Delete: the selected objects and the animations aimed at them go on the clipboard, then the objects are deleted (one undo step). Locked objects can't be deleted, so a selection with any locked object is refused rather than half cut</summary>
+    private void DoCut()
+    {
+        var selected = GtCanvas.SelectedElements;
+        if (GtCanvas.Document is not { } doc || selected.Count == 0) return;
+        if (selected.Any(el => el.Locked || FindLayer(doc, el)?.Locked == true))
+        {
+            StatusText.Text = "Can't cut: a selected object or its layer is locked";
+            return;
+        }
+        int count = selected.Count;
+        DoCopy();
+        if (LayersPanel.DeleteElements()) StatusText.Text = $"Cut {count} element(s)";
+    }
     private void Paste_Click(object? sender, RoutedEventArgs e) => _ = DoPasteAsync();
 
     /// <summary>Windows bumps this every time anything is put on the clipboard, so it tells us whether the system clipboard was written after our last in-app copy; 0 everywhere else, which leaves the in-app clipboard in charge</summary>
@@ -2265,7 +2293,8 @@ public partial class MainWindow : Window
             var layer = doc.Layers.Contains(entry.Layer) ? entry.Layer : GetOrCreateDefaultLayer(doc);
             var element = entry.Element.Clone();
 
-            element.Name = NextCopyName(names, entry.Element.Name);
+            // after a Cut the original name is free again, so the object comes back as itself (and its animations still match)
+            element.Name = names.Contains(entry.Element.Name) ? NextCopyName(names, entry.Element.Name) : entry.Element.Name;
             names.Add(element.Name);
             renames[entry.Element.Name] = element.Name;
 
