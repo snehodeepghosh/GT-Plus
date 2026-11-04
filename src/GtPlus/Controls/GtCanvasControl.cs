@@ -726,7 +726,7 @@ public class GtCanvasControl : Control
     }
 
     public static readonly StyledProperty<CanvasTool> ActiveToolProperty =
-        AvaloniaProperty.Register<GtCanvasControl, CanvasTool>(nameof(ActiveTool), CanvasTool.Select);
+        AvaloniaProperty.Register<GtCanvasControl, CanvasTool>(nameof(ActiveTool), CanvasTool.Edit);
 
     public CanvasTool ActiveTool
     {
@@ -989,10 +989,8 @@ public class GtCanvasControl : Control
         ClearWebFocus();
 
         // previewing falls back to selection for every tool: the model geometry the handles and drags work against is not where the objects are being drawn
-        // Option/Alt on a resize handle is a resize from the centre, not the temporary Select tool Alt gives everywhere else
-        bool altOnHandle = alt && !IsPreviewing && ActiveTool == CanvasTool.Edit && HitTestHandle(docPt) != ResizeHandle.None;
-        bool useSelect = IsPreviewing || ActiveTool == CanvasTool.Select ||
-                         (ActiveTool == CanvasTool.Edit && alt && !altOnHandle);
+        // the Move tool (CanvasTool.Edit) selects, moves and resizes in one; previewing falls back to plain selection
+        bool useSelect = IsPreviewing || ActiveTool == CanvasTool.Select;
 
         if (useSelect)
         {
@@ -1024,8 +1022,20 @@ public class GtCanvasControl : Control
                 else ClearSelection();
             }
         }
-        else // Edit tool, no Alt: resize handles or move
+        else // Move tool: box-select, layer gestures, resize handles or move
         {
+            // Cmd/Ctrl-drag draws a selection box, wherever it starts
+            if (ctrl)
+            {
+                _isDragBoxing    = true;
+                _dragBoxAdditive = shift;
+                _dragStart       = docPt;
+                _dragCurrent     = docPt;
+                e.Pointer.Capture(this);
+                e.Handled = true;
+                return;
+            }
+
             // a selected layer owns the gesture inside its own frame: its handles resize it and a drag anywhere inside moves it, and a press outside falls through to the elements
             if (TryBeginLayerGesture(docPt))
             {
@@ -2439,7 +2449,7 @@ public class GtCanvasControl : Control
         var resolved = GtTextFormat.Resolve(tb.Text);
         if (string.IsNullOrEmpty(resolved)) return null;
         var text     = tb.Uppercase ? resolved.ToUpper() : resolved;
-        var typeface = new Typeface(new FontFamily(tb.FontFamily), tb.FontStyle, tb.FontWeight);
+        var typeface = FontFaces.Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight);
         var bounds   = new Rect(0, 0, Math.Max(tb.Dimensions.Width, 1), Math.Max(tb.Dimensions.Height, 1));
 
         var plan = ResolveTextPlan(tb, text, typeface, bounds);
@@ -2456,7 +2466,7 @@ public class GtCanvasControl : Control
     {
         var resolved = GtTextFormat.Resolve(tb.Text);
         var text     = tb.Uppercase ? resolved.ToUpper() : resolved;
-        var typeface = new Typeface(new FontFamily(tb.FontFamily), tb.FontStyle, tb.FontWeight);
+        var typeface = FontFaces.Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight);
 
         var plan = ResolveTextPlan(tb, text, typeface, bounds);
         if (LayOutText(text, typeface, tb, plan, bounds, Brushes.White) is not { } laid) return null;
@@ -3557,7 +3567,7 @@ public class GtCanvasControl : Control
 
         var resolved  = GtTextFormat.Resolve(tb.Text);
         var text      = tb.Uppercase ? resolved.ToUpper() : resolved;
-        var typeface  = new Typeface(new FontFamily(tb.FontFamily), tb.FontStyle, tb.FontWeight);
+        var typeface  = FontFaces.Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight);
         var fillBrush = MakeBrush(tb.Fill) ?? new SolidColorBrush(Colors.White);
 
         var plan = ResolveTextPlan(tb, text, typeface, bounds);
@@ -3621,7 +3631,7 @@ public class GtCanvasControl : Control
     {
         var chunk    = ticker.CreateChunk(text);
         var body     = chunk.Uppercase ? chunk.Text.ToUpper() : chunk.Text;
-        var typeface = new Typeface(new FontFamily(chunk.FontFamily), chunk.FontStyle, chunk.FontWeight);
+        var typeface = FontFaces.Typeface(chunk.FontFamily, chunk.FontStyle, chunk.FontWeight);
         var plan     = ResolveTextPlan(chunk, body, typeface, bounds);
         if (LayOutText(body, typeface, chunk, plan, bounds, Brushes.White) is not { } laid)
             return 0;
@@ -3797,7 +3807,7 @@ public class GtCanvasControl : Control
         var bounds   = new Rect(0, 0, tb.Dimensions.Width, tb.Dimensions.Height);
         var resolved = GtTextFormat.Resolve(tb.Text);
         var text     = tb.Uppercase ? resolved.ToUpper() : resolved;
-        var typeface = new Typeface(new FontFamily(tb.FontFamily), tb.FontStyle, tb.FontWeight);
+        var typeface = FontFaces.Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight);
         var plan     = ResolveTextPlan(tb, text, typeface, bounds);
 
         if (LayOutText(text, typeface, tb, plan, bounds, Brushes.White) is not { } laid)

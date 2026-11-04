@@ -94,8 +94,8 @@ images, UI aids, view state) stays in memory or preferences and is never written
   - Plain prop: `HistoryService? History` - push actions here
   - Selection: `SelectedElements`, `SetSelection`, `ToggleSelection`, `ClearSelection`, `SelectionChanged` event
   - Select tool: click to select, drag an element to move it (not while previewing), Shift+click to toggle, Ctrl+drag for rubber-band box
-  - Edit tool: click to select, drag to move, handle drag to resize; Alt held = temporary Select, except a press on a
-    resize handle, which resizes from the centre (`ApplyResizeDelta(fromCenter)`, Alt read live on every move; snapping
+  - Move tool (`CanvasTool.Edit`): click to select, drag to move, handle drag to resize, Cmd/Ctrl-drag to box-select;
+    Alt on a resize handle resizes from the centre (`ApplyResizeDelta(fromCenter)`, Alt read live on every move; snapping
     uses the centred `ResizedBounds`)
   - Resize handles: 8 per selected element (individual bounds, not group bounds); all selected elements resize by same delta
   - Locked elements / locked layers cannot be moved or resized
@@ -143,7 +143,10 @@ images, UI aids, view state) stays in memory or preferences and is never written
     - The old Edit / Layer / View menus are gone: undo, clipboard and layer commands are Home tab buttons; guides, rulers, snap and preferences are View tab toggles. The `*MenuItem` names were kept on those buttons/toggles so the code-behind is unchanged apart from `IsChecked == true` reads
     - Shared ribbon styles (tab, `rb lg` / `rb sm` / `rb row` buttons, `Path.ic` line icons, palette) are in `Styles/Ribbon.axaml`
   - File menu built in code via `RebuildFileMenu()` - includes Open, Save (Ctrl+S), Save As (Ctrl+Shift+S), recent files, Exit
-  - Toolbar (left): Select (S), Edit (E), Text Box (T), Rectangle (R), Ticker (K), Web Page (W), Image (I) - ToggleButtons `SelectToolButton`/`EditToolButton`/`TextBoxToolButton`/`RectangleToolButton`/`TickerToolButton`
+  - Toolbar (left): Move (V), Text Box (T), Rectangle (R), Ticker (K), Web Page (W), Image (I). Move is `CanvasTool.Edit`
+    behind `EditToolButton`; `SelectToolButton` is hidden and `SetTool(CanvasTool.Select)` maps to Edit, so there is one
+    tool that selects, moves, resizes and (Cmd/Ctrl-drag) box-selects. `CanvasTool.Select` survives only as the
+    preview-mode fallback inside the canvas
   - Right panel: tab strip (Layers / History) → `LayersPanel` / `HistoryPanel`; Debug panel below (toggled in Preferences)
   - Bottom bar: status text, Fit button, zoom slider + label
   - `OnKeyDown`: S=Select, E=Edit, Ctrl+Z=Undo, Ctrl+Y=Redo, Ctrl+S=Save, Ctrl+Shift+S=SaveAs
@@ -182,6 +185,11 @@ images, UI aids, view state) stays in memory or preferences and is never written
   layers and skipped in `_exportMode`; MainWindow's View › Reference group drives it (`SetReference`). After a PSD import
   it is `PsdImportResult.ReferencePng`, from `PsdFile.Composite` (the image data section, read by
   `PsdReader.ReadComposite`). Never written to the file
+- **Font faces:** `Services/FontFaces.cs` lists a family's faces with their *true* weight (OS/2 usWeightClass, what
+  DirectWrite/vMix matches) and the platform's reported weight (CoreText on macOS gives e.g. 947 for a Black). `Pick`
+  applies the CSS/DirectWrite matching rule on true weights; `FontFaces.Typeface(...)` is what every text draw uses, so
+  the face drawn is the one vMix would pick. The Font group's weight menu (`RebuildWeights`) lists real faces with a
+  sample; `ByPostScriptName` gives the PSD importer exact matches
 - **Fonts:** `ReplaceFontsWindow` (Home › Fonts) groups text by (family, weight, style) and rewrites those three
   attributes, one undo step. The Font group's faux italic button sets Skew X = `FauxItalicAngle` (−10°, Photoshop's
   measured slant) with `CenterOffset` on the first baseline

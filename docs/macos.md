@@ -18,7 +18,7 @@ Tooltips show the Mac symbols, for example ⇧⌘N rather than Ctrl+Shift+N.
 | Selection box | ⌘-drag | Ctrl-drag |
 | Zoom | ⌘-scroll | Ctrl-scroll |
 
-Single-key tool shortcuts (S Select, E Edit, T Text, R Rectangle, K Ticker, W Web Page, I Image) are the same on
+Single-key tool shortcuts (V Move, T Text, R Rectangle, K Ticker, W Web Page, I Image) are the same on
 every platform.
 
 ## App name and icon

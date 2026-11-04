@@ -294,8 +294,58 @@ public partial class PropertiesPanelControl : UserControl
 
     private void PopulateFontWeights()
     {
-        foreach (var w in _weightEntries)
-            FontWeightBox.Items.Add(w);
+        // each row names the face and shows a sample drawn in it, as a font menu does; the closed box shows the name only
+        FontWeightBox.ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<WeightEntry>((entry, _) =>
+        {
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,12,*"), MinWidth = 170 };
+            var name = new TextBlock { Text = entry?.ToString() ?? "", VerticalAlignment = VerticalAlignment.Center };
+            grid.Children.Add(name);
+            if (entry?.SampleFamily is { } fam)
+            {
+                var sample = new TextBlock
+                {
+                    Text = "Sample", FontSize = 15, FontFamily = new FontFamily(fam), FontWeight = entry.SampleWeight,
+                    VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
+                };
+                Grid.SetColumn(sample, 2);
+                grid.Children.Add(sample);
+            }
+            return grid;
+        }, supportsRecycling: false);
+        FontWeightBox.SelectionBoxItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<WeightEntry>(
+            (entry, _) => new TextBlock { Text = entry?.ToString() ?? "" }, supportsRecycling: false);
+        RebuildWeights(null, FontWeight.Normal);
+    }
+
+    private string? _weightFamily;
+
+    /// <summary>
+    /// the weight menu for <paramref name="family"/>: the faces the font really has, named as the font names them and valued at
+    /// their true weight (the number vMix matches against), with the one a title's weight resolves to selected. A font that is
+    /// not installed gets GT's full list of weight names
+    /// </summary>
+    private void RebuildWeights(string? family, FontWeight current)
+    {
+        var faces = family is null ? Array.Empty<FontFaces.Face>() : FontFaces.FacesOf(family);
+        if (!string.Equals(_weightFamily, family, StringComparison.OrdinalIgnoreCase) || FontWeightBox.Items.Count == 0)
+        {
+            _weightFamily = family;
+            FontWeightBox.Items.Clear();
+            var upright = faces.Where(f => !f.Italic).ToList();
+            if (upright.Count == 0) upright = faces.ToList();
+            if (upright.Count > 0)
+                foreach (var f in upright.GroupBy(f => f.TrueWeight).Select(g => g.First()))
+                    FontWeightBox.Items.Add(new WeightEntry(f.StyleName.Length > 0 ? f.StyleName : GtFontWeights.ToName((FontWeight)f.TrueWeight),
+                                                            FontFaces.GtWeight(f), f.Family, f.PlatformWeight));
+            else
+                foreach (var w in _weightEntries) FontWeightBox.Items.Add(w);
+        }
+
+        var entries = FontWeightBox.Items.OfType<WeightEntry>().ToList();
+        var picked = family is null ? null : FontFaces.Pick(family, current, FontStyle.Normal);
+        FontWeightBox.SelectedItem = entries.FirstOrDefault(w => w.Weight == current)
+            ?? (picked is null ? null : entries.FirstOrDefault(w => (int)w.Weight == picked.TrueWeight))
+            ?? entries.FirstOrDefault(w => w.Weight == FontWeight.Normal) ?? entries.FirstOrDefault();
     }
 
     private static readonly WeightEntry[] _weightEntries = GtFontWeights.All
@@ -390,8 +440,7 @@ public partial class PropertiesPanelControl : UserControl
                 StrikeButton.IsChecked    = tb.Strikethrough;
                 UppercaseButton.IsChecked = tb.Uppercase;
 
-                FontWeightBox.SelectedItem = _weightEntries.FirstOrDefault(w => w.Weight == tb.FontWeight)
-                    ?? _weightEntries.First(w => w.Weight == FontWeight.Normal);
+                RebuildWeights(tb.FontFamily, tb.FontWeight);
 
                 HAlignLeftButton.IsChecked   = tb.TextAlign == GtTextAlign.Left;
                 HAlignCenterButton.IsChecked = tb.TextAlign == GtTextAlign.Center;
@@ -946,6 +995,7 @@ public partial class PropertiesPanelControl : UserControl
 
         _updating = true;
         FontFamilyBox.Text = CurrentText.FontFamily;
+        RebuildWeights(CurrentText.FontFamily, CurrentText.FontWeight);
         _updating = false;
     }
 
@@ -1756,8 +1806,12 @@ public partial class PropertiesPanelControl : UserControl
     private sealed class WeightEntry
     {
         public FontWeight Weight { get; }
+        /// <summary>the face to draw this row's sample in, null for the generic list</summary>
+        public string? SampleFamily { get; }
+        public FontWeight SampleWeight { get; }
         private readonly string _name;
-        public WeightEntry(string name, FontWeight weight) { _name = name; Weight = weight; }
+        public WeightEntry(string name, FontWeight weight, string? sampleFamily = null, FontWeight sampleWeight = FontWeight.Normal)
+        { _name = name; Weight = weight; SampleFamily = sampleFamily; SampleWeight = sampleWeight; }
         public override string ToString() => _name;
     }
 

@@ -497,7 +497,8 @@
             <StackPanel Orientation="Vertical" Spacing="4">
 
                 <ToggleButton x:Name="SelectToolButton"
-                              IsChecked="True"
+                              IsVisible="False"
+                              IsChecked="False"
                               ToolTip.Tip="Select (S) - Click to select, drag to move, Ctrl+drag to box-select"
                               Classes="tool"
                               Click="SelectToolButton_Click">
@@ -508,8 +509,8 @@
                 </ToggleButton>
 
                 <ToggleButton x:Name="EditToolButton"
-                              IsChecked="False"
-                              ToolTip.Tip="Edit (E) - Drag to move elements; hold Alt for Select"
+                              IsChecked="True"
+                              ToolTip.Tip="Move (V) - Click to select, drag to move, drag a handle to resize (Alt = from the centre, Shift = keep proportions), Shift+click to add to the selection, Ctrl+drag to box-select"
                               Classes="tool"
                               Click="EditToolButton_Click">
                     <Panel Width="16" Height="16">

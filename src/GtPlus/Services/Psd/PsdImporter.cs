@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using Avalonia.Media;
 using GtPlus.Models;
+using GtPlus.Services;
 
 namespace GtPlus.Services.Psd;
 
@@ -623,7 +624,17 @@ internal static class FontMatcher
     {
         if (string.IsNullOrWhiteSpace(postScriptName)) return new Match("", FontWeight.Normal, false, false);
 
+        // the exact installed face first: its PostScript name is what the PSD stores, and its own family name and true
+        // weight are what vMix will look the font up by
+        if (FontFaces.ByPostScriptName(postScriptName) is { } exact)
+            return new Match(exact.Family, FontFaces.GtWeight(exact), exact.Italic, true);
+
+        // otherwise split the name into family and style. A family can itself contain dashes ("GFF-Latin-Black" is the
+        // family "GFF Latin"), so the longest dash-separated prefix that names an installed family wins
+        var installedFamilies = InstalledFamilies();
         int dash = postScriptName.IndexOf('-');
+        for (int d = postScriptName.LastIndexOf('-'); d > 0; d = postScriptName.LastIndexOf('-', d - 1))
+            if (installedFamilies.ContainsKey(Normalize(postScriptName[..d]))) { dash = d; break; }
         string familyPart = dash > 0 ? postScriptName[..dash] : postScriptName;
         string stylePart  = dash > 0 ? postScriptName[(dash + 1)..] : "";
 
@@ -647,7 +658,7 @@ internal static class FontMatcher
             if (key.EndsWith(word) && installed.TryGetValue(key[..^word.Length], out family))
                 return new Match(family, weight == FontWeight.Normal ? w : weight, italic, true);
 
-        return new Match(SplitCamel(familyPart), weight, italic, false);
+        return new Match(SplitCamel(familyPart.Replace('-', ' ')), weight, italic, false);
     }
 
     /// <summary>ascent and descent in pixels for a family at <paramref name="size"/>, from the font's own metrics</summary>
@@ -655,7 +666,7 @@ internal static class FontMatcher
     {
         try
         {
-            var face = new Typeface(new FontFamily(family), style, weight).GlyphTypeface;
+            var face = FontFaces.Typeface(family, style, weight).GlyphTypeface;
             double em = face.Metrics.DesignEmHeight;
             if (em > 0)
                 return (-face.Metrics.Ascent * size / em, face.Metrics.Descent * size / em);

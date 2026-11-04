@@ -786,6 +786,8 @@ public partial class MainWindow : Window
 
     private void SetTool(CanvasTool tool)
     {
+        // one Move tool does what Select and Edit did; anything still asking for Select gets Move
+        if (tool == CanvasTool.Select) tool = CanvasTool.Edit;
         GtCanvas.ActiveTool = tool;
         SelectToolButton.IsChecked    = tool == CanvasTool.Select;
         EditToolButton.IsChecked      = tool == CanvasTool.Edit;
@@ -804,12 +806,8 @@ public partial class MainWindow : Window
 
         switch (e.Key)
         {
-            case Key.S when e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox:
-                SetTool(CanvasTool.Select);
-                e.Handled = true;
-                break;
-            case Key.E when e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox:
-                SetTool(CanvasTool.Edit);
+            case Key.V when e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox:
+                SetTool(CanvasTool.Edit);   // the Move tool
                 e.Handled = true;
                 break;
             case Key.T when e.KeyModifiers == KeyModifiers.None && e.Source is not TextBox:
