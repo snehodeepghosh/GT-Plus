@@ -308,12 +308,14 @@ public partial class LayersPanelControl : UserControl
         var layersBefore = doc.Layers.ToList();
         var elemsBefore  = doc.Layers.ToDictionary(l => l, l => l.Elements.ToList());
         var locsBefore   = doc.Layers.SelectMany(l => l.Elements).ToDictionary(e => e, e => e.Location);
+        var framesBefore = doc.Layers.ToDictionary(l => l, l => (l.Location, l.Dimensions, l.InnerWidth, l.InnerHeight));
 
         ApplyNewOrder(final);
 
         var layersAfter = doc.Layers.ToList();
         var elemsAfter  = doc.Layers.ToDictionary(l => l, l => l.Elements.ToList());
         var locsAfter   = doc.Layers.SelectMany(l => l.Elements).ToDictionary(e => e, e => e.Location);
+        var framesAfter = doc.Layers.ToDictionary(l => l, l => (l.Location, l.Dimensions, l.InnerWidth, l.InnerHeight));
 
         var desc = _dragging.Kind == RowKind.Layer
             ? "Reorder Layers"
@@ -331,6 +333,7 @@ public partial class LayersPanelControl : UserControl
                     doc.Layers.Add(layer);
                 }
                 foreach (var (el, loc) in locsBefore) el.Location = loc;
+                foreach (var (l, f) in framesBefore) (l.Location, l.Dimensions, l.InnerWidth, l.InnerHeight) = f;
                 _canvas?.ClearSelection();
                 Populate(doc);
                 _canvas?.InvalidateVisual();
@@ -345,6 +348,7 @@ public partial class LayersPanelControl : UserControl
                     doc.Layers.Add(layer);
                 }
                 foreach (var (el, loc) in locsAfter) el.Location = loc;
+                foreach (var (l, f) in framesAfter) (l.Location, l.Dimensions, l.InnerWidth, l.InnerHeight) = f;
                 _canvas?.ClearSelection();
                 Populate(doc);
                 _canvas?.InvalidateVisual();
@@ -387,10 +391,17 @@ public partial class LayersPanelControl : UserControl
         foreach (var layer in _doc.Layers)
             foreach (var el in layer.Elements) ownerBefore[el] = layer;
         foreach (var (layer, elems) in layerElements)
+        {
+            var arrived = new List<GtElement>();
             foreach (var el in elems)
                 if (ownerBefore.TryGetValue(el, out var from) && !ReferenceEquals(from, layer))
+                {
                     el.Location = new GtPoint(el.Location.X + from.Location.X - layer.Location.X,
                                               el.Location.Y + from.Location.Y - layer.Location.Y);
+                    arrived.Add(el);
+                }
+            if (arrived.Count > 0) GrowFrameToCover(layer, arrived, elems);
+        }
 
         // visual order is top-to-bottom, model/render order is bottom-to-top
         _doc.Layers.Clear();
@@ -403,6 +414,37 @@ public partial class LayersPanelControl : UserControl
             foreach (var el in elems) layer.Elements.Add(el);
             _doc.Layers.Add(layer);
         }
+    }
+
+    /// <summary>
+    /// a layer's frame cuts off what lies outside it, so when objects are dropped into a layer the frame grows (never shrinks)
+    /// to cover their boxes; the layer's other objects shift by the opposite amount, so nothing moves on screen. A frame whose
+    /// inner composition is sized differently keeps that ratio
+    /// </summary>
+    private static void GrowFrameToCover(GtLayer layer, IReadOnlyList<GtElement> arrived, IReadOnlyList<GtElement> all)
+    {
+        double w = layer.Dimensions.Width, h = layer.Dimensions.Height;
+        if (w <= 0 || h <= 0) return;   // a frameless layer (files in the wild) shows everything already
+
+        double x0 = 0, y0 = 0, x1 = w, y1 = h;
+        foreach (var el in arrived)
+        {
+            x0 = Math.Min(x0, el.Location.X);
+            y0 = Math.Min(y0, el.Location.Y);
+            x1 = Math.Max(x1, el.Location.X + el.Dimensions.Width);
+            y1 = Math.Max(y1, el.Location.Y + el.Dimensions.Height);
+        }
+        x0 = Math.Floor(x0); y0 = Math.Floor(y0); x1 = Math.Ceiling(x1); y1 = Math.Ceiling(y1);
+        if (x0 >= 0 && y0 >= 0 && x1 <= w && y1 <= h) return;
+
+        double sx = layer.InnerWidth  > 0 ? layer.InnerWidth  / w : 1;
+        double sy = layer.InnerHeight > 0 ? layer.InnerHeight / h : 1;
+        layer.Location    = new GtPoint(layer.Location.X + x0, layer.Location.Y + y0);
+        layer.Dimensions  = new GtSize(x1 - x0, y1 - y0);
+        layer.InnerWidth  = Math.Round((x1 - x0) * sx, 3);
+        layer.InnerHeight = Math.Round((y1 - y0) * sy, 3);
+        foreach (var el in all)
+            el.Location = new GtPoint(el.Location.X - x0, el.Location.Y - y0);
     }
 
     private Border BuildLayerHeader(GtLayer layer, out TextBlock nameBlock)

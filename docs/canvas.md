@@ -54,6 +54,6 @@ Reveal) are measured against its frame, so they now play relative to the tighter
   clicking elsewhere keeps it. Right-click › Rename still works.
 - Rows show the normal arrow pointer. Drag a row up or down to reorder it.
 - Dragging an object into **another layer** keeps it where it is on screen: its position is converted to the new
-  layer's frame. A layer's frame still cuts off whatever lies outside it, so part of an object dropped outside the
-  new layer's frame is hidden until the frame covers it.
+  layer's frame. If the object reaches outside that frame, the frame **grows** just enough to cover it, so nothing is
+  cut off. The layer's other objects don't move on screen, and undo puts both the object and the frame back.
 - Holding **Option** over the line between two rows shows the clipping cursor; see [Masks](masks.md).
