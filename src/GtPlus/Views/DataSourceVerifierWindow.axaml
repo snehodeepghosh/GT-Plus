@@ -48,7 +48,7 @@
 
         <!-- options bar -->
         <Grid DockPanel.Dock="Top"
-              ColumnDefinitions="Auto,Auto,*,Auto"
+              ColumnDefinitions="Auto,Auto,Auto,*,Auto"
               Margin="0,0,0,8">
 
             <CheckBox x:Name="HeaderCheck"
@@ -76,8 +76,18 @@
                           SelectionChanged="RecordCombo_SelectionChanged" />
             </StackPanel>
 
+            <CheckBox x:Name="RowsToColumnsCheck"
+                      Grid.Column="2"
+                      Content="Convert rows to columns"
+                      ToolTip.Tip="As vMix's data source option: all rows become one, columns numbered by row (ign.1, ign.2 with more than 10 columns, otherwise ign1, ign2)"
+                      Foreground="#cccccc"
+                      FontSize="12"
+                      VerticalAlignment="Center"
+                      Margin="14,0,0,0"
+                      IsCheckedChanged="RowsToColumnsCheck_IsCheckedChanged" />
+
             <TextBlock x:Name="FetchStatus"
-                       Grid.Column="3"
+                       Grid.Column="4"
                        Text=""
                        Foreground="#888888"
                        FontSize="12"

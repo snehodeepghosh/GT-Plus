@@ -58,6 +58,22 @@ public static class DataSourceService
     public const string NestedObjectError = "Nested object - vMix cannot bind nested data";
     public const string NestedArrayError  = "Nested array - vMix cannot bind nested data";
 
+    /// <summary>
+    /// vMix's "Convert rows to columns" data source option: every row is merged into one, each column named with its row
+    /// number counted from 1. vMix's help: when more than 10 columns are detected the name and row are separated by a dot
+    /// (Column1.3), otherwise they are run together (Name1, Name2)
+    /// </summary>
+    public static DataRecord ConvertRowsToColumns(IReadOnlyList<DataRecord> records)
+    {
+        var merged  = new DataRecord { Label = "All rows" };
+        int columns = records.Count == 0 ? 0 : records.Max(r => r.Fields.Count);
+        string sep  = columns > 10 ? "." : "";
+        for (int row = 0; row < records.Count; row++)
+            foreach (var f in records[row].Fields)
+                merged.Fields.Add(new DataField { Name = f.Name + sep + (row + 1), Value = f.Value, Error = f.Error });
+        return merged;
+    }
+
     public static DataParseResult Parse(string? text, DataSourceFormat format, bool firstRowIsHeader)
     {
         var result = new DataParseResult { Format = format };

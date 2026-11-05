@@ -4,6 +4,14 @@ Optimal GT Designer is a fork of [GT Plus](https://github.com/Coow/GT-Plus) 0.1.
 on this fork, from the first update onwards. Throughout, titles stay plain vMix GT files: no feature changes how a
 `.gtzip` is written or how vMix reads it, and editor-only aids are never saved into the file.
 
+## 0.1.60 — 5 November 2026
+
+### Data
+- **The Data Source Verifier reads multi-row JSON the way vMix does with Convert rows to columns.** vMix merges every
+  row into one and numbers each column by its row: `ign.1`, `ign.2` when there are more than 10 columns, otherwise
+  `ign1`, `ign2`. The verifier now has the same **Convert rows to columns** option. It is ticked by itself when the
+  title's field names only match the numbered columns. Before, a title named this way showed every field as missing.
+
 ## 0.1.59 — 5 November 2026
 
 ### Fixes

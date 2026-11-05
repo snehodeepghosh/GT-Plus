@@ -228,6 +228,22 @@ public partial class DataSourceVerifierWindow : Window
         Verify();
     }
 
+    /// <summary>set once the user ticks or unticks Convert rows to columns, after which it is no longer chosen for them</summary>
+    private bool _rowsToColumnsChosen;
+    private DataRecord? _merged;
+
+    private void RowsToColumnsCheck_IsCheckedChanged(object? sender, RoutedEventArgs e)
+    {
+        if (_suppress) return;
+        _rowsToColumnsChosen = true;
+        RecordCombo.IsEnabled = RowsToColumnsCheck.IsChecked != true;
+        BuildResults();
+    }
+
+    /// <summary>title fields vMix would fill from this record; used to pick the reading of the data that suits the title</summary>
+    private int Bound(DataRecord? record) =>
+        DataMatchService.Match(Document, record).Count(m => m.Status is DataMatchStatus.Ok or DataMatchStatus.CaseMismatch);
+
     private void RecordCombo_SelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (_suppress) return;
@@ -269,6 +285,18 @@ public partial class DataSourceVerifierWindow : Window
 
         RecordPanel.IsVisible = labels.Count > 1;
 
+        // a multi-row source read the way vMix's Convert rows to columns reads it; ticked for the user when the title's
+        // field names (ign.1, ign.2 ...) only line up with the numbered columns
+        _merged = _result.Records.Count > 1 ? DataSourceService.ConvertRowsToColumns(_result.Records) : null;
+        RowsToColumnsCheck.IsVisible = _merged is not null;
+        if (_merged is not null && !_rowsToColumnsChosen)
+        {
+            _suppress = true;
+            RowsToColumnsCheck.IsChecked = Bound(_merged) > Bound(_result.Records[RecordCombo.SelectedIndex < 0 ? 0 : RecordCombo.SelectedIndex]);
+            _suppress = false;
+        }
+        RecordCombo.IsEnabled = !(_merged is not null && RowsToColumnsCheck.IsChecked == true);
+
         BuildResults();
     }
 
@@ -277,6 +305,7 @@ public partial class DataSourceVerifierWindow : Window
         get
         {
             if (_result is null || _result.Records.Count == 0) return null;
+            if (_merged is not null && RowsToColumnsCheck.IsChecked == true) return _merged;
             var index = RecordCombo.SelectedIndex;
             if (index < 0 || index >= _result.Records.Count) index = 0;
             return _result.Records[index];
