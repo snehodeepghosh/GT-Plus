@@ -4,6 +4,13 @@ Optimal GT Designer is a fork of [GT Plus](https://github.com/Coow/GT-Plus) 0.1.
 on this fork, from the first update onwards. Throughout, titles stay plain vMix GT files: no feature changes how a
 `.gtzip` is written or how vMix reads it, and editor-only aids are never saved into the file.
 
+## 0.1.58 — 5 November 2026
+
+### Fixes
+- **A clipping base's opacity no longer fades what's clipped to it**, matching GT Title Designer. Turn a base down to
+  0% and the objects clipped to it still show at full strength, inside its shape. A fade animation on the base works
+  the same way. Before, clipped objects faded with their base and disappeared at 0%.
+
 ## 0.1.57 — 5 November 2026
 
 ### Fixes

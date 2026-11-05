@@ -17,8 +17,11 @@ object's **pixels**, not its bounding box:
 
 - an image used as a mask cuts by its transparency
 - a gradient fading to transparent fades the masked object with it
-- the mask object's crop, opacity and effects count
-- the mask object's own animation (fly, zoom, reveal, fade) moves and changes the mask
+- the mask object's crop and effects count
+- the mask object's **opacity doesn't**: a base turned down to 0% still clips at full strength. Use this to clip to a
+  shape without the shape itself showing
+- the mask object's own animation (fly, zoom, reveal) moves and changes the mask. A fade on the base fades only the
+  base, not what's clipped to it
 - a text mask cuts by the exact letter shapes
 - a mask object that is **hidden** masks nothing, and the masked object draws whole
 

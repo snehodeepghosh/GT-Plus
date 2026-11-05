@@ -2407,19 +2407,18 @@ public partial class GtCanvasControl : Control
         if (anim is not null && (anim.Hidden || anim.OpacityMul <= 0 ||
                                  anim.ScaleX <= 0 || anim.ScaleY <= 0)) return;
 
-        // resolve mask the way GT's engine does (GraphicsObject.OnCompose): the mask object is composed in full - fill, bitmap
-        // alpha, gradient, crop, effects, its opacity and its own animation - and only what it actually draws lets the masked
-        // object through. A mask object that is not visible masks nothing, so the object draws whole. Only the rendering is
-        // per-pixel here; the file still stores nothing but <Mask Object="Name" />
+        // resolve mask the way GT's engine does (GraphicsObject.OnCompose): the mask object is composed in a mask-write pass -
+        // fill, bitmap alpha, gradient, crop, effects and its own movement - and only what it draws lets the masked object
+        // through. Its opacity, set or animated (a Fade), does not thin the mask: in GT a base faded to 0% still clips at full
+        // strength, which is how a mask shape is used without being seen. A mask object that is not visible masks nothing, so
+        // the object draws whole. Only the rendering is per-pixel here; the file still stores nothing but <Mask Object="Name" />
         if (element.MaskObject is not null &&
             layerElements.TryGetValue(element.MaskObject, out var maskEl) &&
             !ReferenceEquals(maskEl, element) && maskEl.Visible)
         {
             var maskAnim = _animationFrame?.ForElement(maskEl);
-            // a mask that has animated itself out of existence masks everything away
-            if (maskEl.Opacity <= 0) return;
-            if (maskAnim is not null && (maskAnim.Hidden || maskAnim.OpacityMul <= 0 ||
-                                         maskAnim.ScaleX <= 0 || maskAnim.ScaleY <= 0)) return;
+            // a mask that has shrunk out of existence masks everything away; a transparent one still masks
+            if (maskAnim is not null && (maskAnim.Hidden || maskAnim.ScaleX <= 0 || maskAnim.ScaleY <= 0)) return;
 
             // text already cuts by its exact glyph outline, so only the other kinds need recording
             bool outlineIsExact = maskEl is GtTextBlock and not GtTickerElement;
@@ -2446,13 +2445,20 @@ public partial class GtCanvasControl : Control
     /// </summary>
     private readonly HashSet<string> _maskRecordFailures = new(StringComparer.Ordinal);
 
+    /// <summary>true while a mask object is being recorded: it is drawn at full opacity, as GT's mask-write pass draws it</summary>
+    private bool _maskPass;
+
     private (IBrush Brush, Rect Bounds)? BuildMaskBrush(GtElement maskEl, GtAnimOverride? maskAnim, Rect localCanvas, Rect? localLayer)
     {
         try
         {
             var group = new DrawingGroup();
             using (var mctx = group.Open())
-                RenderElementBodySkewed(mctx, maskEl, maskAnim, localCanvas, localLayer);
+            {
+                _maskPass = true;
+                try { RenderElementBodySkewed(mctx, maskEl, maskAnim, localCanvas, localLayer); }
+                finally { _maskPass = false; }
+            }
 
             var bounds = group.GetBounds();
             if (bounds.Width <= 0 || bounds.Height <= 0) return (Brushes.Transparent, default);
@@ -2481,7 +2487,7 @@ public partial class GtCanvasControl : Control
                                              GtElement maskEl, GtAnimOverride? maskAnim, Rect localCanvas, Rect? localLayer)
     {
         Rect?  maskReveal = null;
-        double maskAlpha  = Math.Clamp(maskEl.Opacity * (maskAnim?.OpacityMul ?? 1.0), 0.0, 1.0);
+        const double maskAlpha = 1.0;   // the mask object's opacity never thins its mask (see RenderElement)
         if (maskAnim is not null && maskAnim.HasCrop)
         {
             var mr = GtAnimationEvaluator.CropClip(AnimatedBounds(maskEl, maskAnim), maskAnim);
@@ -2748,7 +2754,8 @@ public partial class GtCanvasControl : Control
     {
         var anim   = _animationFrame?.ForElement(element);
         var bounds = AnimatedBounds(element, anim);
-        var opacity = anim is null ? element.Opacity
+        var opacity = _maskPass    ? 1.0
+                    : anim is null ? element.Opacity
                                    : element.Opacity * Math.Clamp(anim.OpacityMul, 0.0, 1.0);
 
         // a Reveal replaces the element's crop range for the duration of the wipe
