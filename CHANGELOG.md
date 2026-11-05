@@ -4,6 +4,14 @@ Optimal GT Designer is a fork of [GT Plus](https://github.com/Coow/GT-Plus) 0.1.
 on this fork, from the first update onwards. Throughout, titles stay plain vMix GT files: no feature changes how a
 `.gtzip` is written or how vMix reads it, and editor-only aids are never saved into the file.
 
+## 0.1.57 — 5 November 2026
+
+### Fixes
+- **Imported Photoshop artwork no longer floods vMix's data sources.** Every pixel layer from a PSD became a rectangle
+  that vMix listed as an `X.Fill.Bitmap` field. They are now imported with **Hidden** ticked. Images added
+  with Import Image stay exposed. Titles imported before this fix keep their fields: select those rectangles and tick
+  Data › Options › Hidden.
+
 ## 0.1.56 — 5 November 2026
 
 ### Fixes

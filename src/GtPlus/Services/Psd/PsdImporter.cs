@@ -380,6 +380,9 @@ public static class PsdImporter
             Dimensions = new GtSize(cw, ch),
             Fill       = new GtBrush { Type = GtBrushType.Bitmap, BitmapSource = path },
             StrokeThickness = 0,
+            // a pixel layer is artwork, not a slot for an operator to swap: without Hidden vMix lists every one of them as
+            // an "X.Fill.Bitmap" data source. Images added with Import Image stay exposed
+            DataFlags  = GtDataFlags.Hidden,
         };
     }
 

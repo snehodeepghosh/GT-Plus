@@ -15,7 +15,7 @@ file itself, with no extra libraries.
 | Layers outside any group | Each run of them shares one GT layer |
 | A group inside a group | Flattened into its top-level group's layer, keeping its layers |
 | A text layer | An editable text object: text, font, size, bold and italic, alignment, colour, underline, strikethrough, all caps, leading and paragraph boxes |
-| A pixel or shape layer | A rectangle filled with the layer's picture, cut to the canvas and trimmed of empty edges |
+| A pixel or shape layer | A rectangle filled with the layer's picture, cut to the canvas and trimmed of empty edges. It has **Data › Options › Hidden** ticked, so vMix doesn't list it as a `.Fill.Bitmap` data source. Untick Hidden on any picture an operator should be able to swap |
 | A hidden layer or group | Skipped |
 | A locked layer | Locked |
 | Layer opacity, fill opacity, group opacity | Multiplied into the object's opacity |
