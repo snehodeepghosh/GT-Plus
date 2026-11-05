@@ -4,6 +4,11 @@ Optimal GT Designer is a fork of [GT Plus](https://github.com/Coow/GT-Plus) 0.1.
 on this fork, from the first update onwards. Throughout, titles stay plain vMix GT files: no feature changes how a
 `.gtzip` is written or how vMix reads it, and editor-only aids are never saved into the file.
 
+## 0.1.59 — 5 November 2026
+
+### Fixes
+- **Cmd/Ctrl+O opens a title.** The File menu showed the shortcut, but pressing it did nothing.
+
 ## 0.1.58 — 5 November 2026
 
 ### Fixes

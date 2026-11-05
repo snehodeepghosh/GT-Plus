@@ -894,6 +894,10 @@ public partial class MainWindow : Window
                 _ = DoSaveAs();
                 e.Handled = true;
                 break;
+            case Key.O when e.KeyModifiers == PlatformKeys.Command:
+                OpenFile_Click(this, new RoutedEventArgs());
+                e.Handled = true;
+                break;
             case Key.N when e.KeyModifiers == (PlatformKeys.Command | KeyModifiers.Shift):
                 DoNewLayer();
                 e.Handled = true;
