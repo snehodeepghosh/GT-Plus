@@ -4,6 +4,14 @@ Optimal GT Designer is a fork of [GT Plus](https://github.com/Coow/GT-Plus) 0.1.
 on this fork, from the first update onwards. Throughout, titles stay plain vMix GT files: no feature changes how a
 `.gtzip` is written or how vMix reads it, and editor-only aids are never saved into the file.
 
+## 0.1.61 — 25 November 2026
+
+### Fixes
+- **Pictures draw on macOS 27.2.** On a MacBook Pro with macOS 27.2.1, most of an imported title's pictures (banners,
+  logos, flags) didn't draw, though the title itself was saved correctly. The app now draws with Metal instead of
+  OpenGL, which Apple has deprecated, and keeps OpenGL and software drawing as fallbacks. `OPTIMAL_GT_RENDERER` forces
+  one, for diagnosing a machine (see docs/macos.md).
+
 ## 0.1.60 — 5 November 2026
 
 ### Data

@@ -21,6 +21,20 @@ Tooltips show the Mac symbols, for example ⇧⌘N rather than Ctrl+Shift+N.
 Single-key tool shortcuts (V Move, T Text, R Rectangle, K Ticker, W Web Page, I Image) are the same on
 every platform.
 
+## Graphics
+
+The app draws with Metal, Apple's graphics API, and falls back to OpenGL, then to software drawing, if Metal can't
+start. Before 0.1.61 it used OpenGL first, and on macOS 27.2 OpenGL stopped drawing many of a title's pictures.
+
+To check whether a drawing problem comes from the graphics backend, start the app with one forced:
+
+```bash
+OPTIMAL_GT_RENDERER=software "/Applications/Optimal GT Designer.app/Contents/MacOS/GtPlus"
+```
+
+`metal`, `opengl` and `software` are accepted. The log (`vmix-gt-plus.log`, next to the app's executable) names the
+order in use on its third line.
+
 ## App name and icon
 
 On macOS the app shows as **Optimal GT Designer**, in the menu bar, window titles and Dock, with the Optimal Studios
