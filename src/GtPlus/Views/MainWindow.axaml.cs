@@ -207,7 +207,8 @@ public partial class MainWindow : Window
 
         if (_prefs.CheckUpdatesOnStartup) _ = CheckForUpdatesAtStartup();
 
-        Logger.Info($"Graphics backend: {DiagnosticsService.GraphicsBackend()}, window scale {RenderScaling:0.##}x");
+        Logger.Info($"Optimal GT Designer {AppVersion.Current}; graphics backend: {DiagnosticsService.GraphicsBackend()}, " +
+                    $"window scale {RenderScaling:0.##}x");
     }
 
     /// <summary>silent check: the window only appears when a newer release exists and it is not the one the user skipped</summary>

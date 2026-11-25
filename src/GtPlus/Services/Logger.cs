@@ -56,7 +56,9 @@ public static class Logger
             Console.WriteLine($"[WARN] Could not open log file: {ex.Message}");
         }
 
-        Write("INFO ", $"Optimal GT Designer {AppVersion.Current} on {RuntimeInformation.OSDescription} " +
+        // the app version is read from an Avalonia resource, which is only reachable once the app has started, so it is
+        // logged with the graphics backend instead (MainWindow.OnOpened)
+        Write("INFO ", $"{RuntimeInformation.OSDescription} " +
                        $"({RuntimeInformation.OSArchitecture}, process {RuntimeInformation.ProcessArchitecture}), " +
                        $".NET {Environment.Version}");
 
