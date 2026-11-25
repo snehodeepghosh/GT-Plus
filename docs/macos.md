@@ -32,8 +32,8 @@ To check whether a drawing problem comes from the graphics backend, start the ap
 OPTIMAL_GT_RENDERER=software "/Applications/Optimal GT Designer.app/Contents/MacOS/GtPlus"
 ```
 
-`metal`, `opengl` and `software` are accepted. The log (`vmix-gt-plus.log`, next to the app's executable) names the
-order in use on its third line.
+`metal`, `opengl` and `software` are accepted. The log records the order tried and the backend that started (see
+[Debugging](debugging.md)).
 
 ## App name and icon
 

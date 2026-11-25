@@ -4,6 +4,20 @@ Optimal GT Designer is a fork of [GT Plus](https://github.com/Coow/GT-Plus) 0.1.
 on this fork, from the first update onwards. Throughout, titles stay plain vMix GT files: no feature changes how a
 `.gtzip` is written or how vMix reads it, and editor-only aids are never saved into the file.
 
+## 0.1.62 — 25 November 2026
+
+### Debugging
+- **File › Debug › Save Diagnostic Report…** saves a zip for working out a problem on another machine. It holds:
+  - system and graphics details;
+  - the open title's layers and objects, and a decode check of every picture in it;
+  - this session's and the last session's logs;
+  - a CPU-drawn reference image to compare with the screen.
+  Nothing is sent anywhere.
+- **File › Debug › Show Log File** and **Verbose Logging**.
+- **The log moved** to the system's log folder (`~/Library/Logs/Optimal GT Designer` on macOS), and the last session's
+  log is kept. It now records the graphics backend in use, each title opened, pictures that can't be drawn, and errors
+  and crashes with their full stack traces. Before, it was overwritten on every launch inside the app bundle.
+
 ## 0.1.61 — 25 November 2026
 
 ### Fixes

@@ -206,6 +206,8 @@ public partial class MainWindow : Window
         FitToWindow();
 
         if (_prefs.CheckUpdatesOnStartup) _ = CheckForUpdatesAtStartup();
+
+        Logger.Info($"Graphics backend: {DiagnosticsService.GraphicsBackend()}, window scale {RenderScaling:0.##}x");
     }
 
     /// <summary>silent check: the window only appears when a newer release exists and it is not the one the user skipped</summary>
@@ -1569,6 +1571,8 @@ public partial class MainWindow : Window
         about.Click += About_Click;
         FileMenu.Items.Add(about);
 
+        FileMenu.Items.Add(BuildDebugMenu());
+
         var updates = new MenuItem { Header = "Check for _Updates..." };
         ToolTip.SetTip(updates, "Look for a newer release on GitHub. Nothing is downloaded automatically.");
         updates.Click += (_, _) => ShowUpdateWindow();
@@ -1577,6 +1581,80 @@ public partial class MainWindow : Window
         var exit = new MenuItem { Header = "E_xit" };
         exit.Click += Exit_Click;
         FileMenu.Items.Add(exit);
+    }
+
+    /// <summary>File › Debug: the diagnostic report, the log file and verbose logging</summary>
+    private MenuItem BuildDebugMenu()
+    {
+        var debug = new MenuItem { Header = "_Debug" };
+
+        var report = new MenuItem { Header = "Save Diagnostic _Report..." };
+        ToolTip.SetTip(report, "Save a zip with system and graphics details, the logs, a check of every picture in the open title " +
+                               "and a reference drawing of it. Nothing is sent anywhere.");
+        report.Click += async (_, _) => await SaveDiagnosticReport();
+        debug.Items.Add(report);
+
+        var showLog = new MenuItem { Header = "Show _Log File" };
+        ToolTip.SetTip(showLog, Logger.LogPath ?? "The log file could not be opened");
+        showLog.IsEnabled = Logger.LogPath is not null;
+        showLog.Click += (_, _) => RevealInFileManager(Logger.LogPath);
+        debug.Items.Add(showLog);
+
+        var verbose = new MenuItem
+        {
+            Header      = "_Verbose Logging",
+            ToggleType  = MenuItemToggleType.CheckBox,
+            IsChecked   = Logger.Verbose,
+        };
+        ToolTip.SetTip(verbose, "Also log detailed steps, such as each file read. Lasts until the app closes.");
+        verbose.Click += (_, _) =>
+        {
+            Logger.Verbose = !Logger.Verbose;
+            Logger.Info($"Verbose logging {(Logger.Verbose ? "on" : "off")}");
+            RebuildFileMenu();
+        };
+        debug.Items.Add(verbose);
+
+        return debug;
+    }
+
+    private async System.Threading.Tasks.Task SaveDiagnosticReport()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title             = "Save Diagnostic Report",
+            SuggestedFileName = $"Optimal GT Designer diagnostics {DateTime.Now:yyyy-MM-dd HHmm}.zip",
+            DefaultExtension  = "zip",
+            FileTypeChoices   = new[] { new FilePickerFileType("Zip archive") { Patterns = new[] { "*.zip" } } },
+        });
+        var path = file?.TryGetLocalPath();
+        if (path is null) return;
+        try
+        {
+            DiagnosticsService.WriteReport(path, this, GtCanvas.Document, _currentPath, _currentAssets, GtCanvas);
+            StatusText.Text = $"Diagnostic report saved  ·  {System.IO.Path.GetFileName(path)}";
+            RevealInFileManager(path);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Diagnostic report failed", ex);
+            StatusText.Text = $"Diagnostic report failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>shows the file selected in Finder / Explorer, or its folder in the Linux file manager</summary>
+    private static void RevealInFileManager(string? path)
+    {
+        if (path is null) return;
+        try
+        {
+            var psi = OperatingSystem.IsMacOS()   ? new System.Diagnostics.ProcessStartInfo("open", new[] { "-R", path })
+                    : OperatingSystem.IsWindows() ? new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{path}\"")
+                    : new System.Diagnostics.ProcessStartInfo("xdg-open", new[] { System.IO.Path.GetDirectoryName(path) ?? path });
+            psi.UseShellExecute = false;
+            System.Diagnostics.Process.Start(psi);
+        }
+        catch (Exception ex) { Logger.Warn($"Could not show {path}: {ex.Message}"); }
     }
 
     private async void OpenFile_Click(object? sender, RoutedEventArgs e)
@@ -1712,7 +1790,8 @@ public partial class MainWindow : Window
             _recent.Add(path);
             Avalonia.Threading.Dispatcher.UIThread.Post(RebuildFileMenu, Avalonia.Threading.DispatcherPriority.Background);
 
-            Logger.Info($"File loaded: {filename}");
+            Logger.Info($"File loaded: {path} - {document.Layers.Count} layers, {document.Layers.Sum(l => l.Elements.Count)} objects, " +
+                        $"{assets.Count} pictures ({assets.Blobs.Values.Sum(b => (long)b.Length) / 1024:N0} KB)");
         }
         catch (Exception ex)
         {

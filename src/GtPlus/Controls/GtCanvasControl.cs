@@ -4119,8 +4119,13 @@ public partial class GtCanvasControl : Control
                 using var ms = new MemoryStream(bytes);
                 result = new Bitmap(ms);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // cached as null below, so this is written once per picture rather than on every frame
+                Logger.Warn($"picture '{logicalPath}' ({bytes.Length:N0} bytes) could not be decoded and is not drawn: {ex.GetType().Name}: {ex.Message}");
+            }
         }
+        else Logger.Warn($"picture '{logicalPath}' is not in the title's assets and is not drawn");
 
         cache[logicalPath] = result;
         if (evictable) TrimSequenceCache(logicalPath);

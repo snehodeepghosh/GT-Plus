@@ -11,6 +11,9 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // an exception thrown on the UI thread is logged with its stack; the app still handles it the way it did before
+        Avalonia.Threading.Dispatcher.UIThread.UnhandledException += (_, e) =>
+            GtPlus.Services.Logger.Error("Unhandled exception on the UI thread", e.Exception);
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             desktop.MainWindow = new MainWindow();
         base.OnFrameworkInitializationCompleted();

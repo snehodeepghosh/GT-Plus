@@ -18,3 +18,4 @@ structures GT already has, and editor-only aids such as the reference image are 
 | [Canvas](canvas.md) | Drag-to-move and the canvas background |
 | [macOS](macos.md) | Shortcuts on a Mac, the app name and icon, building the `.app` |
 | [Platforms](platforms.md) | macOS, Windows and Linux packages, installing, and building them all |
+| [Debugging](debugging.md) | The diagnostic report, the log file and verbose logging |
